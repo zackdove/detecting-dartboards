@@ -30,14 +30,11 @@ vector<Rect> ground_truth(int filenum);
 Rect vect_to_rect(vector<int> vect);
 float iou(Rect A, Rect B);
 int calculate_all();
-float f1_score();
+float f1_score(float FalsePos, float TruePos, float real_pos);
 
 /** Global variables */
 String cascade_name = "frontalface.xml";
 CascadeClassifier cascade;
-float TP = 0;
-float FP = 0;
-float RP = 0;
 
 /** @function main */
 int main( int argc, const char** argv ){
@@ -51,8 +48,6 @@ int main( int argc, const char** argv ){
 		detectAndDisplay( frame, stoi(imgnum) );
 		imwrite( "detected.jpg", frame );
 	}
-	std::cout << "TPs = " << TP << std::endl;
-	std::cout << "FPs = " << FP << std::endl;
 	return 0;
 }
 
@@ -64,16 +59,12 @@ int main( int argc, const char** argv ){
  		detectAndDisplay( frame, imgnum);
  		imwrite( "detected"+to_string(imgnum)+".jpg", frame );
 	 }
-	 float f1 = f1_score();
-	 std::cout << "f1 score = " << f1 << std::endl;
 	 return 0;
  }
 
-float f1_score(){
-	float precision = TP/(TP+FP);
-	std::cout << "precision  = " << precision << std::endl;
-	float recall  = TP/(RP);
-	std::cout << "recall  = " << recall << std::endl;
+float f1_score(float FalsePos, float TruePos, float RealPos){
+	float precision = TruePos/(TruePos+FalsePos);
+	float recall  = TruePos/(RealPos);
 	return 2*(precision*recall)/(precision+recall);
 }
 
@@ -87,8 +78,8 @@ float f1_score(){
 	vector<Rect> truth_faces = ground_truth(imgnum);
 	printFaces(truth_faces);
 	float threshold = 0.5;
-	int true_positives = 0;
-	int false_positives = 0;
+	float true_positives = 0;
+	float false_positives = 0;
 	//Calculate IOU for each
 	for( int i = 0; i < detected_faces.size(); i++ ){
 		rectangle(frame, Point(detected_faces[i].x, detected_faces[i].y), Point(detected_faces[i].x + detected_faces[i].width, detected_faces[i].y + detected_faces[i].height), Scalar( 0, 255, 0 ), 2);
@@ -100,8 +91,12 @@ float f1_score(){
 			}
 		}
 	}
-	TP += true_positives;
-	FP += detected_faces.size()-true_positives;
+	false_positives += detected_faces.size()-true_positives;
+	int real_pos = truth_faces.size();
+	float f1 = f1_score(false_positives, true_positives, real_pos);
+	std::cout << "Image: " << imgnum << std::endl;
+	std::cout << "TPR " << true_positives/(true_positives+truth_faces.size()) << std::endl;
+	std::cout << "F1: " << f1 << std::endl;
 	//Draw for groud truthh
 	for (int i = 0; i < truth_faces.size(); i++){
 		rectangle(frame, Point(truth_faces[i].x, truth_faces[i].y), Point(truth_faces[i].x + truth_faces[i].width, truth_faces[i].y + truth_faces[i].height), Scalar( 0, 0, 255 ), 2);
@@ -137,7 +132,6 @@ vector<Rect> ground_truth(int filenum){
 			row.erase(row.begin());
 			// std::cout << "row size = " << row.size() << std::endl;
 			for (int i=0; i<row.size(); i=i+4){
-				RP++;
 				face_coords_set.push_back(Rect(stoi(row[i]),stoi(row[i+1]),stoi(row[i+2])-stoi(row[i]),stoi(row[i+3])-stoi(row[i+1])));
 			}
 			return face_coords_set;
@@ -154,11 +148,11 @@ Rect vect_to_rect(vector<int> vect){
 }
 
 float iou(Rect A, Rect B){
-	std::cout << "A " << A << std::endl;
-	std::cout << "B " << B << std::endl;
+	// std::cout << "A " << A << std::endl;
+	// std::cout << "B " << B << std::endl;
     Rect intersection = A&B;
-	std::cout << "inter " << intersection.area() << std::endl;
+	// std::cout << "inter " << intersection.area() << std::endl;
     float iou = (float)intersection.area() / ((float)A.area()+(float)B.area()-(float)intersection.area());
-	std::cout << "iou " << std::fixed << std::setprecision(5) << iou << std::endl;
+	// std::cout << "iou " << std::fixed << std::setprecision(5) << iou << std::endl;
     return iou;
 }
