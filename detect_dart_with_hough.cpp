@@ -26,11 +26,12 @@ using namespace cv;
 /** Function Headers */
 void detectAndDisplay( Mat frame, int imgnum );
 void printFaces(std::vector<Rect> faces);
-vector<Rect> ground_truth(int filenum);
 Rect vect_to_rect(vector<int> vect);
-float iou(Rect A, Rect B);
 int calculate_all();
-float f1_score(float FalsePos, float TruePos, float real_pos);
+bool contains_circle(Mat frame);
+bool contains_line(Mat frame);
+bool contains_ellipse(Mat frame);
+bool contains_clustered_lines(Mat frame);
 
 /** Global variables */
 String cascade_name = "frontalface.xml";
@@ -66,18 +67,21 @@ bool contains_circle(Mat frame){
     //Calculate hough space for circle
     //Threshold
     //If above threshold, return true
+    return true;
 }
 
 bool contains_line(Mat frame){
     //Calculate hough space for line
     //Threshold
     //If above threshold, return true
+    return true;
 }
 
 bool contains_ellipse(Mat frame){
     //Calculate hough space for ellipse
     //Threshold
     //If above threshold, return true
+    return true;
 }
 
 bool contains_clustered_lines(Mat frame){
@@ -85,6 +89,7 @@ bool contains_clustered_lines(Mat frame){
     //Threshold on hough value
     //Loop through detected lines
     //  If more than X intersect in the same spot, return true
+    return true;
 }
 
 /** @function detectAndDisplay */
