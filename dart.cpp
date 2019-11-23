@@ -100,7 +100,7 @@ void detectAndDisplay( Mat frame , int imageNumber)
                  }
              }
              // Draw RED box around true position 
-             rectangle(frame, Point(coordinates[i], coordinates[i+1]), Point(coordinates[i+2], coordinates[i+3]), Scalar( 0, 0, 255 ), 2);
+             rectangle(frame, Point(coordinates[j], coordinates[j+1]), Point(coordinates[j+2], coordinates[j+3]), Scalar( 0, 0, 255 ), 2);
              // Print IOU
              std::cout << "IOU for dartboard " << (j/4) + 1 << " = "<< maxiou << std::endl;
         }
