@@ -15,7 +15,6 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 #include <stdio.h>
-#include <math.h>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -24,7 +23,8 @@
 #include <iomanip>
 #include <iostream>  
 #include<string> 
-#define PI 3.14159265
+
+# define PI           3.14159265358979323846
 
 using namespace std;
 using namespace cv;
@@ -36,10 +36,10 @@ Rect vect_to_rect(vector<int> vect);
 int calculate_all();
 void sobel(cv::Mat &input, Mat_<float> kernel, cv::Mat &convo);
 void magSobel(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag);
-int hough_circle(Mat frame);
-int hough_ellipse(Mat frame);
-int hough_line(Mat frame);
-int hough_clustered_lines(Mat frame);
+void hough_circle(Mat &mag_frame, Mat &hough_circles);
+void hough_ellipse(Mat &mag_frame);
+void hough_line(Mat &mag_frame, Mat &hough_lines);
+void hough_clustered_lines(Mat &mag_frame);
 
 /** Global variables */
 String cascade_name = "dart.xml";
@@ -60,44 +60,83 @@ int main( int argc, const char** argv ){
 	return 0;
 }
 
- int calculate_all(){
+int calculate_all(){
     for (int imgnum = 0; imgnum<16; imgnum++){
-    string filename =  "dart"+to_string(imgnum)+".jpg";
-    	Mat frame = imread(filename, CV_LOAD_IMAGE_COLOR);
-    	if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
-        detectAndDisplay( frame, imgnum);
-    	imwrite( "detected"+to_string(imgnum)+".jpg", frame );
+         string filename =  "dart"+to_string(imgnum)+".jpg";
+         Mat frame = imread(filename, CV_LOAD_IMAGE_COLOR);
+         if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
+         detectAndDisplay( frame, imgnum);
+         imwrite( "detected"+to_string(imgnum)+".jpg", frame );
+         return 0;
     }
-    return 0;
- }
-
-bool contains_circle(Mat frame){
-    //Calculate hough space for circle
-    //Threshold
-    //If above threshold, return true
-    return true;
 }
 
-bool contains_line(Mat frame){
-    //Calculate hough space for line
+void hough_circle(cv::Mat &mag_frame, cv::Mat &hough_circles){
+    //Calculate hough space for circles
     //Threshold
     //If above threshold, return true
-    return true;
+
+    int x = mag_frame.rows / 2;
+    int y = mag_frame.cols / 2;
+    int radius = min(x,y) / 2;  // can be max half the size of the smallest dimension
+std::cout << mag_frame.rows << ',' << mag_frame.cols << ',' << radius  << std::endl;
+std::vector<vector<vector<float>>> accu;
+
+    // Look for strong edges
+    for( int i = 0; i < mag_frame.rows; i++){   
+        for( int j = 0; j < mag_frame.cols; j++){
+            if(mag_frame.at<float>(i, j) > 250) {
+                std::cout << mag_frame.at<float>(i,j) << std::endl;
+                // If edge is strong, try ALL circles which have THAT point on its circumference
+                for( int r = 20; r < radius; r++){
+                     for( float t = 0; t < 2*PI; t = t + 0.1) {
+                          // Temporary circle center (a,b)
+                          int a = i - r*cos(t);
+                          int b = j - r*sin(t);
+                          // Check that the radius doesn't exceed the boarder
+                          if((a-r >0) & (b-r >0) & (a+r < mag_frame.rows) &  (b+r < mag_frame.cols)){
+                             // For each temporary circle, look around circumference and sum the votes
+                             int votes = 0;
+                             for( float tempT = 0; tempT < 2*PI; tempT = tempT + 0.3) {
+
+                                 votes += mag_frame.at<float>(a + (r*cos(tempT)), 
+							        b + (r*sin(tempT))); 
+                              }
+                              // Threshold
+                              if(votes > 1000) {
+                              std::cout << i << ',' << j <<'_'<< a << ',' << b <<',' <<  r << '_' << votes  << std::endl;
+                              circle(mag_frame, Point(a,b), r, r, 10);
+                              }
+                          }
+                      }
+                 }
+             }
+          }
+    }
+	imwrite( "mag_detected.jpg", mag_frame );
+
+
 }
 
-bool contains_ellipse(Mat frame){
+
+
+void hough_ellipse(Mat &frame){
     //Calculate hough space for ellipse
     //Threshold
     //If above threshold, return true
-    return true;
 }
 
-bool contains_clustered_lines(Mat frame){
+void hough_line(cv::Mat &frame, cv::Mat &hough_circles){
+    //Calculate hough space for line
+    //Threshold
+    //If above threshold, return true
+}
+
+void hough_clustered_lines(Mat &frame){
     //Calculate hough space for lines
     //Threshold on hough value
     //Loop through detected lines
-    //  If more than X intersect in the same spot, return true
-    return true;
+    //If more than X intersect in the same spot, return true
 }
 
 /** @function detectAndDisplay */
@@ -124,13 +163,16 @@ bool contains_clustered_lines(Mat frame){
 
 	// Sobel filter
 	Mat xConvo, yConvo, mag;
-        sobel(frame_grey,kernel,xConvo);
-        sobel(frame_grey,kernel.t(),yConvo);
-	magSobel(xConvo, yConvo, mag );
+        sobel(frame_grey,kernel, xConvo);
+        sobel(frame_grey, kernel.t(), yConvo);
+	magSobel( xConvo, yConvo, mag);
 
-	imwrite( "Mag.jpg", mag );
-         
-	//Draw detected dartboards for comparison
+        imwrite( "Mag.jpg", mag );
+
+        Mat hough_circles; 
+        hough_circle( mag, hough_circles);
+
+	//Draw detected dartboards from cascade for comparison
 	for (int i = 0; i < detected_dartboards.size(); i++){
 		rectangle(frame, 
 			  Point(detected_dartboards[i].x, detected_dartboards[i].y), 
