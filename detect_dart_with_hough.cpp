@@ -15,6 +15,7 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 #include <stdio.h>
+#include <math.h>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -23,6 +24,7 @@
 #include <iomanip>
 #include <iostream>  
 #include<string> 
+#define PI 3.14159265
 
 using namespace std;
 using namespace cv;
@@ -32,12 +34,12 @@ void detectAndDisplay( Mat frame, int imgnum );
 void printFaces(std::vector<Rect> faces);
 Rect vect_to_rect(vector<int> vect);
 int calculate_all();
-void sobel(cv::Mat &input, Mat_<float> kernel, int size, cv::Mat &convo);
-void MagDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir);
-bool contains_circle(Mat frame);
-bool contains_line(Mat frame);
-bool contains_ellipse(Mat frame);
-bool contains_clustered_lines(Mat frame);
+void sobel(cv::Mat &input, Mat_<float> kernel, cv::Mat &convo);
+void magSobel(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag);
+int hough_circle(Mat frame);
+int hough_ellipse(Mat frame);
+int hough_line(Mat frame);
+int hough_clustered_lines(Mat frame);
 
 /** Global variables */
 String cascade_name = "dart.xml";
@@ -73,9 +75,6 @@ bool contains_circle(Mat frame){
     //Calculate hough space for circle
     //Threshold
     //If above threshold, return true
-
-
-  
     return true;
 }
 
@@ -107,37 +106,36 @@ bool contains_clustered_lines(Mat frame){
 	Mat frame_grey;
 	cvtColor( frame, frame_grey, CV_BGR2GRAY );
 	equalizeHist( frame_grey, frame_grey );
-	cascade.detectMultiScale( frame_grey, detected_dartboards, 1.1, 1, 0|CV_HAAR_SCALE_IMAGE, Size(50, 50), Size(500,500) );
-    cout << "Original detected dartboards" << endl;
-	printFaces(detected_dartboards);
-    for (int i = 0; i < detected_dartboards.size(); i++){
+	cascade.detectMultiScale( frame_grey, 
+				  detected_dartboards, 1.1, 1, 0|CV_HAAR_SCALE_IMAGE, 
+				  Size(50, 50), Size(500,500) );
 
-        Mat dartboard_frame = frame(detected_dartboards[i]);
+        cout << "Original detected dartboards" << endl;
+	printFaces(detected_dartboards);
+
+	//for (int i = 0; i < detected_dartboards.size(); i++){
+        //Mat dartboard_frame = frame(detected_dartboards[i]);
         //Check if face_frame cotains circle, line, ellipse etc
         //If it doesnt meet the criteria, erase it
+
 	// create the SOBEL kernel in 1D, Y is transpose
 	Mat_<float> kernel(3,3);
 	kernel << 1, 0, -1, 2, 0, -2, 1, 0, -1; 
 
-	Mat xConvo;
-        sobel(dartboard_frame,kernel,23,xConvo);
+	// Sobel filter
+	Mat xConvo, yConvo, mag;
+        sobel(frame_grey,kernel,xConvo);
+        sobel(frame_grey,kernel.t(),yConvo);
+	magSobel(xConvo, yConvo, mag );
 
-        Mat yConvo;
-        sobel(dartboard_frame,kernel.t(),23,yConvo);
-
-	Mat mag;
-	Mat dir;
-	MagDir(xConvo, yConvo, mag, dir);
-
-	 imwrite( "xConvo.jpg", xConvo );
-	 imwrite( "yConvo.jpg", yConvo );
-	 imwrite( "Mag.jpg", mag );
-	 imwrite( "Dir.jpg", dir );
+	imwrite( "Mag.jpg", mag );
          
-    }
-	//Draw for groud truthh
+	//Draw detected dartboards for comparison
 	for (int i = 0; i < detected_dartboards.size(); i++){
-		rectangle(frame, Point(detected_dartboards[i].x, detected_dartboards[i].y), Point(detected_dartboards[i].x + detected_dartboards[i].width, detected_dartboards[i].y + detected_dartboards[i].height), Scalar( 0, 0, 255 ), 2);
+		rectangle(frame, 
+			  Point(detected_dartboards[i].x, detected_dartboards[i].y), 
+			  Point(detected_dartboards[i].x + detected_dartboards[i].width, detected_dartboards[i].y + detected_dartboards[i].height), 
+			  Scalar( 0, 0, 255 ), 2);
 	}
 }
 
@@ -147,7 +145,7 @@ void printFaces(std::vector<Rect> faces){
 	}
 }
 
-void sobel(cv::Mat &input, Mat_<float> kernel, int size, cv::Mat &convo)
+void sobel(cv::Mat &input, Mat_<float> kernel, cv::Mat &convo)
 {
 	// intialise the output using the input
         convo.create(input.size(), CV_32FC1);
@@ -162,16 +160,13 @@ void sobel(cv::Mat &input, Mat_<float> kernel, int size, cv::Mat &convo)
 		kernelRadiusX, kernelRadiusX, kernelRadiusY, kernelRadiusY,
 		cv::BORDER_REPLICATE );
 
-	float min = 1000;
-	float max = -1000;
-
-	for ( int i = 1; i < input.rows-1; i++ )
+	for ( int i = 1; i < input.rows; i++ )
 	{	
-		for( int j = 1; j < input.cols-1; j++ )
+		for( int j = 1; j < input.cols; j++ )
 		{
 		        double sum = 0.0;
 
-			for( int m = -kernelRadiusX; m <= kernelRadiusX; m++ )
+			for( int m = -kernelRadiusX; m <= kernelRadiusX; m++ ) // i.e -1 to 1 for radius 3
 			{
 				for( int n = -kernelRadiusY; n <= kernelRadiusY; n++ )
 				{
@@ -187,84 +182,44 @@ void sobel(cv::Mat &input, Mat_<float> kernel, int size, cv::Mat &convo)
 
 					// do the multiplication
 					sum += imageval * kernalval;
-					convo.at<float>(i, j) =  sum;
-				        
+					convo.at<float>(i, j) =  sum;     
 				}
 			}
-			
-			// Finding min & max values (for normalisation)
-			if(sum > max) {
-			  max = sum;
-			}
-			if(sum < min) {
-			  min = sum;
-			}
-
-		}
-	}
-
-	// Normalising loop
-	for ( int i = 1; i < input.rows-1; i++ )
-	{	
-		for( int j = 1; j < input.cols-1; j++ )
-		{
-		        // Normalize calculation
-			float normSum = ((convo.at<float>(i, j) - min) * 255)/ (max - min);
-			convo.at<float>(i, j) =  normSum;
 		}
 	}
 }
 
-void MagDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir)
+void magSobel(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag)
 {
+
   	// intialise the output using the input
         mag.create(inputx.size(), CV_32FC1);
-	dir.create(inputx.size(), CV_32FC1);
 
 	float magmin = 1000;
 	float magmax = -1000;
-	float dirmin = 1000;
-	float dirmax = -1000;
 
 	for ( int i = 0; i < inputx.rows; i++ )
 	{	
 	  for( int j = 0; j < inputx.cols; j++ )
 		{
-
 		  float magx = inputx.at<float>(i, j);
 		  float magy = inputy.at<float>(i, j);
-		  float magTemp = sqrt(pow(magx, 2.0) + pow(magy, 2.0));
-                  float dirTemp = atan2(magy, magx);
-		  mag.at<float>(i, j) = magTemp;
-		  dir.at<float>(i, j) = dirTemp;		           
+		  float magTemp = abs(magx) + abs(magy); // This is a quicker approximation of magnitude
+		  mag.at<float>(i, j) = magTemp;		           
 
 		  // Finding min & max values (for normalisation)
-		  if(magTemp > magmax) {
-                        magmax = magTemp;
-		  }
-		  if(magTemp < magmin) {
-		 	magmin = magTemp;
-		  }
-                  if(dirTemp > dirmax) {
-                        dirmax = dirTemp;
-		  }
-		  if(dirTemp < dirmin) {
-		 	dirmin = dirTemp;
-		  }
-                        
+		  if(magTemp > magmax) { magmax = magTemp; }
+		  if(magTemp < magmin) { magmin = magTemp; }
 		}
 	}
 
 	// Normalising loop
-		for ( int i = 0; i < inputx.rows; i++ )
-	  	{	
-	  		for( int j = 0; j < inputx.cols; j++ )
-		  	{
-                                //Normalize calculation
-		  		float normMag = ((mag.at<float>(i, j) - magmin) * 255)/ (magmax - magmin);
-                                float normDir = ((dir.at<float>(i, j) - dirmin) * 255)/ (dirmax - dirmin);
-				mag.at<float>(i, j) =  normMag;
-                            	dir.at<float>(i, j) =  normDir;
-                        }		
-	       	}
+	for ( int i = 0; i < inputx.rows; i++ )
+	  {	
+	    for( int j = 0; j < inputx.cols; j++ )
+	      {
+	  	float normMag = ((mag.at<float>(i, j) - magmin) * 255)/ (magmax - magmin);
+	      	mag.at<float>(i, j) =  normMag;
+	      }		
+	  }
 }
