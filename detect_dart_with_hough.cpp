@@ -36,7 +36,7 @@ Rect vect_to_rect(vector<int> vect);
 int calculate_all();
 void sobel(cv::Mat &input, Mat_<float> kernel, cv::Mat &convo);
 void magSobel(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag);
-void hough_circle(Mat &mag_frame, Mat &hough_circles);
+int ***hough_circle(Mat &mag_frame);
 void hough_ellipse(Mat &mag_frame);
 void hough_line(Mat &mag_frame, Mat &hough_lines);
 void hough_clustered_lines(Mat &mag_frame);
@@ -60,6 +60,21 @@ int main( int argc, const char** argv ){
 	return 0;
 }
 
+int ***malloc3dArray(int dim1, int dim2, int dim3)
+{
+    int i, j, k;
+    int ***array = (int ***) malloc(dim1 * sizeof(int **));
+
+    for (i = 0; i < dim1; i++) {
+        array[i] = (int **) malloc(dim2 * sizeof(int *));
+	for (j = 0; j < dim2; j++) {
+  	    array[i][j] = (int *) malloc(dim3 * sizeof(int));
+	}
+
+    }
+    return array;
+}
+
 int calculate_all(){
     for (int imgnum = 0; imgnum<16; imgnum++){
          string filename =  "dart"+to_string(imgnum)+".jpg";
@@ -71,22 +86,25 @@ int calculate_all(){
     }
 }
 
-void hough_circle(cv::Mat &mag_frame, cv::Mat &hough_circles){
+int ***hough_circle(cv::Mat &mag_frame){
     //Calculate hough space for circles
     //Threshold
     //If above threshold, return true
 
-    int x = mag_frame.rows / 2;
-    int y = mag_frame.cols / 2;
-    int radius = min(x,y) / 2;  // can be max half the size of the smallest dimension
-std::cout << mag_frame.rows << ',' << mag_frame.cols << ',' << radius  << std::endl;
-std::vector<vector<vector<float>>> accu;
+    const int x = mag_frame.rows / 2;
+    const int y = mag_frame.cols / 2;
+    const int radius = min(x,y) / 2;  // can be max half the size of the smallest dimension
+    int ***accu;
+    accu = malloc3dArray(x, y, radius); 
+
+std::cout << x << ',' << y << ',' << radius  << std::endl;
+    
 
     // Look for strong edges
     for( int i = 0; i < mag_frame.rows; i++){   
         for( int j = 0; j < mag_frame.cols; j++){
-            if(mag_frame.at<float>(i, j) > 250) {
-                std::cout << mag_frame.at<float>(i,j) << std::endl;
+            if(mag_frame.at<float>(j, i) > 250) {
+                std::cout << mag_frame.at<float>(j , i) << std::endl;
                 // If edge is strong, try ALL circles which have THAT point on its circumference
                 for( int r = 20; r < radius; r++){
                      for( float t = 0; t < 2*PI; t = t + 0.1) {
@@ -94,8 +112,10 @@ std::vector<vector<vector<float>>> accu;
                           int a = i - r*cos(t);
                           int b = j - r*sin(t);
                           // Check that the radius doesn't exceed the boarder
-                          if((a-r >0) & (b-r >0) & (a+r < mag_frame.rows) &  (b+r < mag_frame.cols)){
+                          if((a-r >0) && (b-r >0) && (a+r < mag_frame.rows) && (b+r < mag_frame.cols)){
                              // For each temporary circle, look around circumference and sum the votes
+                             //                 std::cout <<'+'<< endl;
+
                              int votes = 0;
                              for( float tempT = 0; tempT < 2*PI; tempT = tempT + 0.3) {
 
@@ -104,8 +124,9 @@ std::vector<vector<vector<float>>> accu;
                               }
                               // Threshold
                               if(votes > 1000) {
-                              std::cout << i << ',' << j <<'_'<< a << ',' << b <<',' <<  r << '_' << votes  << std::endl;
-                              circle(mag_frame, Point(a,b), r, r, 10);
+                                 std::cout << i << ',' << j <<'_'<< a << ',' << b <<',' <<  r << '_' << votes  << std::endl;
+	                         //accu[a][b][r] = votes;
+                                 //circle(mag_frame, Point(a,b), r, r, 10);
                               }
                           }
                       }
@@ -113,9 +134,8 @@ std::vector<vector<vector<float>>> accu;
              }
           }
     }
-	imwrite( "mag_detected.jpg", mag_frame );
-
-
+    imwrite( "mag_detected.jpg", mag_frame );
+    return accu;
 }
 
 
@@ -169,8 +189,8 @@ void hough_clustered_lines(Mat &frame){
 
         imwrite( "Mag.jpg", mag );
 
-        Mat hough_circles; 
-        hough_circle( mag, hough_circles);
+        int ***hough_circles;
+        hough_circles = hough_circle( mag );
 
 	//Draw detected dartboards from cascade for comparison
 	for (int i = 0; i < detected_dartboards.size(); i++){
@@ -235,6 +255,8 @@ void magSobel(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag)
 {
 
   	// intialise the output using the input
+  	Mat temp;
+	temp.create(inputx.size(), CV_32FC1);
         mag.create(inputx.size(), CV_32FC1);
 
 	float magmin = 1000;
@@ -242,12 +264,13 @@ void magSobel(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag)
 
 	for ( int i = 0; i < inputx.rows; i++ )
 	{	
-	  for( int j = 0; j < inputx.cols; j++ )
+                for( int j = 0; j < inputx.cols; j++ )
 		{
 		  float magx = inputx.at<float>(i, j);
 		  float magy = inputy.at<float>(i, j);
 		  float magTemp = abs(magx) + abs(magy); // This is a quicker approximation of magnitude
-		  mag.at<float>(i, j) = magTemp;		           
+		  temp.at<float>(i, j) = magTemp;	
+	          	           
 
 		  // Finding min & max values (for normalisation)
 		  if(magTemp > magmax) { magmax = magTemp; }
@@ -259,9 +282,9 @@ void magSobel(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag)
 	for ( int i = 0; i < inputx.rows; i++ )
 	  {	
 	    for( int j = 0; j < inputx.cols; j++ )
-	      {
-	  	float normMag = ((mag.at<float>(i, j) - magmin) * 255)/ (magmax - magmin);
-	      	mag.at<float>(i, j) =  normMag;
+	      {	  
+	          float normMag = (((temp.at<float>(i, j) - magmin) * 255) / (magmax - magmin));
+	      	  mag.at<float>(i, j) =  normMag;
 	      }		
 	  }
 }
