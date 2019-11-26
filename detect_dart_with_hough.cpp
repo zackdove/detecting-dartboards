@@ -15,6 +15,7 @@
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
 #include <stdio.h>
+#include <math.h>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -24,7 +25,6 @@
 #include <iostream>
 #include<string>
 
-# define PI           3.14159265358979323846
 
 using namespace std;
 using namespace cv;
@@ -35,8 +35,8 @@ void printFaces(std::vector<Rect> faces);
 Rect vect_to_rect(vector<int> vect);
 void calculate_all();
 void sobel(cv::Mat &input, Mat_<float> kernel, cv::Mat &convo);
-void magSobel(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag);
-void hough_circle(cv::Mat &mag_frame, Mat &accu_m);
+void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir);
+void hough_circle(cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
 void hough_ellipse(Mat &mag_frame);
 void hough_line(Mat &mag_frame, Mat &hough_lines);
 void hough_clustered_lines(Mat &mag_frame);
@@ -82,7 +82,7 @@ void calculate_all(){
 	}
 }
 
-void hough_circle(cv::Mat &mag_frame, Mat &accu_m){
+void hough_circle(cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m){
 	//Calculate hough space for circles
 	//Threshold
 	//If above threshold, return true
@@ -95,36 +95,35 @@ void hough_circle(cv::Mat &mag_frame, Mat &accu_m){
 	// Look for strong edges
 	for( int i = 0; i < mag_frame.rows; i++){
 		for( int j = 0; j < mag_frame.cols; j++){
-			cout << "here1" << endl;
-			if(mag_frame.at<float>(i, j) > 100) {
-				cout << "here2" << endl;
-				std::cout << mag_frame.at<float>(i , j) << std::endl;
+			if(mag_frame.at<float>(i, j) > 245) {
+			        std::cout << i << ',' << j << " SELECTED, mag value -> " << mag_frame.at<float>(i , j) << std::endl;
 				// If edge is strong, try ALL circles which have THAT point on its circumference
-				for( int r = 20; r < radius; r++){
-					for( float t = 0; t < 2*PI; t = t + 0.1) {
+				for( int r = 10; r < radius; r++){
+				       
 						// Temporary circle center (a,b)
+				                int t = dir_frame.at<float>(i, j);
 						int a = i - r*cos(t);
 						int b = j - r*sin(t);
 						// Check that the radius doesn't exceed the boarder
 						if((a-r >0) && (b-r >0) && (a+r < mag_frame.rows) && (b+r < mag_frame.cols)){
 							// For each temporary circle, look around circumference and sum the votes
-							//                 std::cout <<'+'<< endl;
-							int votes = 0;
-							for( float tempT = 0; tempT < 2*PI; tempT = tempT + 0.3) {
-								votes += mag_frame.at<float>(a + (r*cos(tempT)),
-								b + (r*sin(tempT)));
-							}
-							// Threshold
-							if(votes > 1000) {
-								std::cout << i << ',' << j <<'_'<< a << ',' << b <<',' <<  r << '_' << votes  << std::endl;
-								cout << "A, B= " << a << ", " << b << endl;
-								// accu[a][b][r] = votes;
-								accu_m.at<float>(a, b, r) = votes;
-								cout << "here" << endl;
-								circle(mag_frame, Point(a,b), r, r, 10);
-							}
-						}
-					}
+       						int votes = 0;
+	       					for( float tempT = 0; tempT < 2*CV_PI; tempT = tempT + (CV_PI/4)) {
+		       					votes += mag_frame.at<float>(a + (r*cos(tempT)),
+			       				b + (r*sin(tempT)));
+				       		}
+                                                std::cout << i << ',' << j <<'_'<< a << ',' << b <<',' <<  r << '_' << votes  << std::endl;
+					       	// Threshold
+						if(votes > 700) {
+							
+       		 
+	       				       
+		       					accu_m.at<float>(a, b, r)++;
+			       				std::cout << accu_m.at<float>(a, b, r) << endl;
+				       			circle(mag_frame, Point(b,a), r, r, 10);
+				       		}
+				       	}
+					
 				}
 			}
 		}
@@ -176,17 +175,18 @@ void detectAndDisplay( Mat frame, int imgnum){
 	kernel << 1, 0, -1, 2, 0, -2, 1, 0, -1;
 
 	// Sobel filter
-	Mat xConvo, yConvo, mag;
+	Mat xConvo, yConvo, mag, dir;
 	sobel(frame_grey,kernel, xConvo);
 	sobel(frame_grey, kernel.t(), yConvo);
-	magSobel( xConvo, yConvo, mag);
+	magDir( xConvo, yConvo, mag, dir);
 	imwrite( "Mag.jpg", mag );
+	imwrite( "Dir.jpg", dir );
 	int x = mag.rows;
 	int y = mag.cols;
 	int radius = min(x,y)/2;
 	int sizes[] = { x, y, radius };
 	Mat accu_m(3, sizes, CV_32FC1, cv::Scalar(0));
-	hough_circle( mag, accu_m );
+	hough_circle( mag, dir, accu_m );
 	//Draw detected dartboards from cascade for comparison
 	for (int i = 0; i < detected_dartboards.size(); i++){
 		rectangle(frame,
@@ -241,32 +241,56 @@ void sobel(cv::Mat &input, Mat_<float> kernel, cv::Mat &convo){
 		}
 	}
 
-void magSobel(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag){
+void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir)
+{
+  	// intialise the output using the input
+        mag.create(inputx.size(), CV_32FC1);
+	dir.create(inputx.size(), CV_32FC1);
 
-	// intialise the output using the input
-	Mat temp;
-	temp.create(inputx.size(), CV_32FC1);
-	mag.create(inputx.size(), CV_32FC1);
 	float magmin = 1000;
 	float magmax = -1000;
-	for ( int i = 0; i < inputx.rows; i++ ){
-		for( int j = 0; j < inputx.cols; j++ ){
-			float magx = inputx.at<float>(i, j);
-			float magy = inputy.at<float>(i, j);
-			float magTemp = abs(magx) + abs(magy); // This is a quicker approximation of magnitude
-			temp.at<float>(i, j) = magTemp;
-			// Finding min & max values (for normalisation)
-			if(magTemp > magmax) { magmax = magTemp; }
-			if(magTemp < magmin) { magmin = magTemp; }
-		}
-	}
-	// Normalising loop
+	float dirmin = 1000;
+	float dirmax = -1000;
+
 	for ( int i = 0; i < inputx.rows; i++ )
-	{
-		for( int j = 0; j < inputx.cols; j++ )
+	{	
+	  for( int j = 0; j < inputx.cols; j++ )
 		{
-			float normMag = (((temp.at<float>(i, j) - magmin) * 255) / (magmax - magmin));
-			mag.at<float>(i, j) =  normMag;
+
+		  float magx = inputx.at<float>(i, j);
+		  float magy = inputy.at<float>(i, j);
+		  float magTemp = sqrt(pow(magx, 2.0) + pow(magy, 2.0));
+                  float dirTemp = atan2(magy,  magx);
+		  mag.at<float>(i, j) = magTemp;
+		  dir.at<float>(i, j) = dirTemp;		           
+
+		  // Finding min & max values (for normalisation)
+		  if(magTemp > magmax) {
+                        magmax = magTemp;
+		  }
+		  if(magTemp < magmin) {
+		 	magmin = magTemp;
+		  }
+                  if(dirTemp > dirmax) {
+                        dirmax = dirTemp;
+		  }
+		  if(dirTemp < dirmin) {
+		 	dirmin = dirTemp;
+		  }
+                        
 		}
 	}
+
+	// Normalising loop
+		for ( int i = 0; i < inputx.rows; i++ )
+	  	{	
+	  		for( int j = 0; j < inputx.cols; j++ )
+		  	{
+                                //Normalize calculation
+			  	float normMag = ((mag.at<float>(i, j) - magmin) * 255)/ (magmax - magmin);
+			   float normDir = ((dir.at<float>(i, j) - dirmin) * 255)/ (dirmax - dirmin);
+			  	mag.at<float>(i, j) =  normMag;
+			  	dir.at<float>(i, j) =  normDir;
+                        }		
+	       	}
 }
