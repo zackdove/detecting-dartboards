@@ -40,7 +40,7 @@ void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir);
 void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
 void hough_ellipse(Mat &mag_frame);
 vector<vector<int>> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
-vector<vector<int>> hough_clustered_lines(cv::Mat &frame, vector<vector<int>> points_lines);
+vector<vector<int>> hough_clustered_lines(vector<vector<int>> points_lines);
 
 /** Global variables */
 String cascade_name = "dart.xml";
@@ -99,62 +99,35 @@ void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &a
 	    if(mag_frame.at<float>(i, j) > 200) {
 	      // If edge is strong, vote for circles corresponding to its direction
 	      for( int r = 30; r < radius; r++){ 
-		//for (int k = -1; k < 2; k++){
-		//  for (int l = -1; l < 2; l++){
+		for (int k = -1; k < 2; k++){
+		  for (int l = -1; l < 2; l++){
 		    // Circle centers around selected point 
-		      float d = dir_frame.at<float>(i, j);
-		      int a = i + r*cos(d*CV_PI/180);
-		      int b = j + r*sin(d*CV_PI/180);
+		      int d = dir_frame.at<float>(i, j);
+		      int a = i + k*r*cos(d*CV_PI/180);
+		      int b = j + l*r*sin(d*CV_PI/180);
 		      // Check that the radius doesn't exceed the boarder
 		      if((a > 0) && (b > 0) && (a < x) && (b < y)){	
-			accu_m.at<int>(a, b, r) += 1;
+			accu_m.at<float>(a, b, r) += 1;
 		      }
-		  //} 
-	//	}
+		  } 
+		}
 	      }	
 	    }
 	  }
 	}
 
-	float pointsmax = -1000.0;
-	float pointsmin = 1000.0;
-
 	// Condensing points to just (x,y)
         for( int i = 0; i < mag_frame.rows; i++){
 	  for( int j = 0; j < mag_frame.cols; j++){
-
-            if(points.at<float>(i, j)  > pointsmax) {
-		pointsmax = points.at<float>(i, j);
-	    }
-	    if(points.at<float>(i, j) < pointsmin) {
-	   	pointsmin = points.at<float>(i, j);
-            }  
-
-
-
-
 	    for( int r = 30; r < radius; r++){ 
-	      points.at<float>(i, j) += accu_m.at<int>(i,j,r);
+	      points.at<int>(i, j) += accu_m.at<float>(i,j,r);
 	    }
-	    if(points.at<float>(i, j) > 100){
-	      std::cout << i << ',' << j << ',' << " points = " << points.at<float>(i, j) << std::endl;
+	    if(points.at<int>(i, j) > 300){
+	      std::cout << i << ',' << j << ',' << " points = " << points.at<int>(i, j) << std::endl;
 	      circle(frame, Point(j, i), 10 , Scalar( 0, 0, 255 ), 2);
 	    }
 	  }
-	}
-
-	for ( int i = 0; i < mag_frame.rows; i++ )
- 	 {	
-  	    for( int j = 0; j < mag_frame.cols; j++ )
-		{
-		  //Normalize calculation
-		  float norm = (((points.at<float>(i, j) - pointsmin) * 255) / (pointsmax - pointsmin));
-	          points.at<float>(i, j) = norm;
-		  std::cout << pointsmax << ',' << pointsmin << ',' << points.at<float>(i, j) << norm << std::endl;
-		}		
-   	 }	
-	
-	imwrite("points.jpg", points);
+	} 
 }
 
 void hough_ellipse(Mat &frame){
@@ -185,13 +158,13 @@ vector<vector<int>> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_
       	}
       } 
     }
-    for( int p = 0; p < d; p++) {
-      for( int r = 0; r < 180; r++) {
-	if(accu_m.at<int>(p, r) > 200) { // Threshold
-	 float a = cos(r*CV_PI/180);
-	 float b = sin(r*CV_PI/180);
-	 int x0 = x + a*p;
-	 int y0 = y + b*p;
+    for( int k = 0; k < d; k++) {
+      for( int l = 0; l < 180; l++) {
+	if(accu_m.at<int>(k, l) > 200) { // Threshold
+	 float a = cos(l*CV_PI/180);
+	 float b = sin(l*CV_PI/180);
+	 int x0 = x + a*k;
+	 int y0 = y + b*k;
 	 int x1 = int(x0 + mini*(-b));
 	 int y1 = int(y0 + mini*(a));
 	 int x2 = int(x0 - mini*(-b));
@@ -206,19 +179,15 @@ vector<vector<int>> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_
   return points_lines;
 }
 
-vector<vector<int>> hough_clustered_lines(Mat &frame, vector<vector<int>> points_lines){
+vector<vector<int>> hough_clustered_lines(vector<vector<int>> points_lines){
   vector<vector<int>> points_clustered_lines;
 
   for( int p = 0; p < points_lines.size(); p++){ 
-	int x1 = points_lines[p][0];
-	int y1 = points_lines[p][1];
-	int x2 = points_lines[p][2];
-	int y2 = points_lines[p][3];
-	int a = y1 - y2;
-	int b = x1 - x2;
-	int c = a*(x2) + b*(y2);
-
-//	std::cout << x1 << ',' << x2 << ',' << y1 << ',' << y2 << '/' << a << ',' << b << ',' << c << std::endl;
+	 int x1 = points_lines[p][0];
+	 int y1 = points_lines[p][1];
+	 int x2 = points_lines[p][2];
+	 int y2 = points_lines[p][3];
+	std::cout << x1 << ',' << x2 << ',' << y1 << ',' << y2 << std::endl;
       	}
   return points_clustered_lines;
 }
@@ -263,11 +232,11 @@ void detectAndDisplay( Mat frame, int imgnum){
 	int radius = min(x,y)/2;
 	int sizes_circles[] = { x, y, radius };
 	Mat accu_circles(3, sizes_circles, CV_32FC1, cv::Scalar(0));
-	hough_circle( frame, mag, dir, accu_circles, points_circle );
+	//hough_circle( frame, mag, dir, accu_circles, points_circle );
 
 	Mat accu_lines;
-	//vector<vector<int>> points_lines = hough_line( frame, mag, dir, accu_lines);
-        //vector<vector<int>> points_clustered_lines = hough_clustered_lines(frame, points_lines); 
+	vector<vector<int>> points_lines = hough_line( frame, mag, dir, accu_lines);
+        vector<vector<int>> points_clustered_lines = hough_clustered_lines(points_lines); 
 
 	//Draw detected dartboards from cascade for comparison
 	for (int i = 0; i < detected_dartboards.size(); i++){
@@ -343,13 +312,7 @@ void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir)
 	  float magx = inputx.at<float>(i, j);
 	  float magy = inputy.at<float>(i, j);
 	  float magTemp = sqrt((magx*magx) + (magy*magy));
-	  float dirTemp = atan2(magy,  magx);
-//	if(magTemp > 240){
-//	magTemp = 255;
-//		}
-//	else {
-//	magTemp = 0;
-//	}
+	  float dirTemp = atan2(magy,  magx) * 180 / CV_PI;
 	  mag.at<float>(i, j) = magTemp;
 	  dir.at<float>(i, j) = dirTemp;		           
 	  
@@ -365,7 +328,7 @@ void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir)
   
   //Normalising loop
   for ( int i = 0; i < inputx.rows; i++ )
-  {	
+    {	
       for( int j = 0; j < inputx.cols; j++ )
 	{
 	  //Normalize calculation
