@@ -142,29 +142,29 @@ void hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &acc
 	//Calculate hough space for line
 	//Threshold
 	//If above threshold, return true
-  //  int s;
-  //	accu_m.create(200, 180, CV_32FC1);
-  //	const int x = mag_frame.rows / 2;
-  //	const int y = mag_frame.cols / 2;
-  //	const int radius = min(x,y) / 2;  // can be max half the size of the smallest dimension
-
-	// Look for strong edges
-  //	for( int i = 0; i < mag_frame.rows; i++){
-  //	  for( int j = 0; j < mag_frame.cols; j++){
-	    // Pixel threshold
-  //	    if(mag_frame.at<float>(i, j) > 200) {
-
-  //	      int xd = abs(x - i);
-  //	      int yd = abs(y - j);
-	      // If edge is strong, vote for lines corresponding to its point 
-  //	      for( int r = 0; r < 180; r++){ 
-		//		int p = xd*cos(r) + yd*sin(r);
-  //		accu_m.at<float>(p, r) += 1;
-  //         std::cout << p << ',' << r << ',' << " points = " << accu_m.at<float>(p, r * (180/CV_PI)) << std::endl;
-  //     }
-//   } 
-//}
-//}		 
+  int s;
+  accu_m.create(200, 180, CV_32FC1);
+  const int x = mag_frame.rows / 2;
+  const int y = mag_frame.cols / 2;
+  const int radius = min(x,y) / 2;  // can be max half the size of the smallest dimension
+  
+  // Look for strong edges
+  for( int i = 0; i < mag_frame.rows; i++){
+    for( int j = 0; j < mag_frame.cols; j++){
+      // Pixel threshold
+      if(mag_frame.at<float>(i, j) > 200) {
+	
+	int xd = abs(x - i);
+	int yd = abs(y - j);
+	// If edge is strong, vote for lines corresponding to its point 
+	for( int r = 0; r < 180; r++){ 
+	  //		int p = xd*cos(r) + yd*sin(r);
+	  accu_m.at<float>(p, r) += 1;
+	  std::cout << p << ',' << r << ',' << " points = " << accu_m.at<float>(p, r * (180/CV_PI)) << std::endl;
+	}
+      } 
+    }
+  }		 
 }
 
 
@@ -215,10 +215,10 @@ void detectAndDisplay( Mat frame, int imgnum){
 	int radius = min(x,y)/2;
 	int sizes_circles[] = { x, y, radius };
 	Mat accu_circles(3, sizes_circles, CV_32FC1, cv::Scalar(0));
-	//hough_circle( frame, mag, dir, accu_circles, points );
+	hough_circle( frame, mag, dir, accu_circles, points );
 
 	Mat accu_lines;
-	hough_line( frame, mag, dir, accu_lines, points);
+	//	hough_line( frame, mag, dir, accu_lines, points);
 
 	//Draw detected dartboards from cascade for comparison
 	for (int i = 0; i < detected_dartboards.size(); i++){
