@@ -39,6 +39,7 @@ void sobel(cv::Mat &input, Mat_<int> kernel, cv::Mat &convo);
 void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir);
 void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
 void hough_ellipse(Mat &mag_frame);
+void normaliseMatrix( Mat matrix );
 vector<vector<int>> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
 vector<vector<int>> hough_clustered_lines(cv::Mat &frame, vector<vector<int>> points_lines);
 
@@ -100,60 +101,34 @@ void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &a
 	      // If edge is strong, vote for circles corresponding to its direction
 	      for( int r = 30; r < radius; r++){ 
 		//for (int k = -1; k < 2; k++){
-		//  for (int l = -1; l < 2; l++){
+		// for (int l = -1; l < 2; l++){
 		    // Circle centers around selected point 
 		      float d = dir_frame.at<float>(i, j);
-		      int a = i + r*cos(d*CV_PI/180);
-		      int b = j + r*sin(d*CV_PI/180);
+		      int a = i + r*cos(d);
+		      int b = j + r*sin(d);
 		      // Check that the radius doesn't exceed the boarder
 		      if((a > 0) && (b > 0) && (a < x) && (b < y)){	
 			accu_m.at<int>(a, b, r) += 1;
 		      }
-		  //} 
-	//	}
+		      //	  } 
+		      // }
 	      }	
 	    }
 	  }
 	}
 
-	float pointsmax = -1000.0;
-	float pointsmin = 1000.0;
-
-	// Condensing points to just (x,y)
+	// Condensing points to (x,y) by summing r's
         for( int i = 0; i < mag_frame.rows; i++){
 	  for( int j = 0; j < mag_frame.cols; j++){
-
-            if(points.at<float>(i, j)  > pointsmax) {
-		pointsmax = points.at<float>(i, j);
-	    }
-	    if(points.at<float>(i, j) < pointsmin) {
-	   	pointsmin = points.at<float>(i, j);
-            }  
-
-
-
-
 	    for( int r = 30; r < radius; r++){ 
 	      points.at<float>(i, j) += accu_m.at<int>(i,j,r);
 	    }
-	    if(points.at<float>(i, j) > 100){
-	      std::cout << i << ',' << j << ',' << " points = " << points.at<float>(i, j) << std::endl;
+	    if(points.at<float>(i, j) > 15){
 	      circle(frame, Point(j, i), 10 , Scalar( 0, 0, 255 ), 2);
 	    }
 	  }
 	}
-
-	for ( int i = 0; i < mag_frame.rows; i++ )
- 	 {	
-  	    for( int j = 0; j < mag_frame.cols; j++ )
-		{
-		  //Normalize calculation
-		  float norm = (((points.at<float>(i, j) - pointsmin) * 255) / (pointsmax - pointsmin));
-	          points.at<float>(i, j) = norm;
-		  std::cout << pointsmax << ',' << pointsmin << ',' << points.at<float>(i, j) << norm << std::endl;
-		}		
-   	 }	
-	
+	normaliseMatrix( points );
 	imwrite("points.jpg", points);
 }
 
@@ -208,19 +183,40 @@ vector<vector<int>> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_
 
 vector<vector<int>> hough_clustered_lines(Mat &frame, vector<vector<int>> points_lines){
   vector<vector<int>> points_clustered_lines;
-
+  Mat accu_m = Mat(frame.rows, frame.cols, CV_32S, cvScalar(0));
   for( int p = 0; p < points_lines.size(); p++){ 
-	int x1 = points_lines[p][0];
-	int y1 = points_lines[p][1];
-	int x2 = points_lines[p][2];
-	int y2 = points_lines[p][3];
-	int a = y1 - y2;
-	int b = x1 - x2;
-	int c = a*(x2) + b*(y2);
-
-//	std::cout << x1 << ',' << x2 << ',' << y1 << ',' << y2 << '/' << a << ',' << b << ',' << c << std::endl;
-      	}
+    float x1 = (float)points_lines[p][0];
+    float y1 = (float)points_lines[p][1];
+    float x2 = (float)points_lines[p][2];
+    float y2 = (float)points_lines[p][3];
+    float m = (y1 - y2) / (x1 - x2);
+    float c = y1 - (m*x1);
+    
+    for(int x = 0; x < frame.rows; x ++){
+      int y = (int)(x*m) + c;
+      //std::cout << p << ',' << points_lines.size() << '/' << m << ',' << c << ',' << '/' << x << ',' << y << std::endl;
+      if( y > 0 && y < frame.rows){
+	accu_m.at<float>(x, y)++;
+      }
+    }
+  }
+  normaliseMatrix(accu_m);
+  imwrite("points.jpg", accu_m);
   return points_clustered_lines;
+}
+
+void normaliseMatrix( Mat matrix ) {
+  double min, max;
+  cv::minMaxLoc(matrix, &min, &max);
+  for ( int i = 0; i < matrix.rows; i++ )
+    {	
+      for( int j = 0; j < matrix.cols; j++ )
+	{
+	  //Normalize calculation
+	  matrix.at<float>(i, j) = (((matrix.at<float>(i, j) - min) * 255.0) / (max - min));
+	  //std::cout << min << ',' << max << ',' << matrix.at<float>(i, j) << std::endl;
+	}		
+    }	
 }
 
 /** @function detectAndDisplay */
@@ -331,46 +327,20 @@ void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir)
   // intialise the output using the input
   mag.create(inputx.size(), CV_32FC1);
   dir.create(inputx.size(), CV_32FC1);
-  
-  float magmin = 1000;
-  float magmax = -1000;
-  
+
   for ( int i = 0; i < inputx.rows; i++ )
     {	
       for( int j = 0; j < inputx.cols; j++ )
 	{
-	  
 	  float magx = inputx.at<float>(i, j);
 	  float magy = inputy.at<float>(i, j);
 	  float magTemp = sqrt((magx*magx) + (magy*magy));
 	  float dirTemp = atan2(magy,  magx);
-//	if(magTemp > 240){
-//	magTemp = 255;
-//		}
-//	else {
-//	magTemp = 0;
-//	}
 	  mag.at<float>(i, j) = magTemp;
-	  dir.at<float>(i, j) = dirTemp;		           
-	  
-	  // Finding min & max values (for normalisation)
-	  if(magTemp > magmax) {
-	    magmax = magTemp;
-	  }
-	  if(magTemp < magmin) {
-	    magmin = magTemp;
-	  }  
+	  dir.at<float>(i, j) = dirTemp;		          
 	}
     }
-  
-  //Normalising loop
-  for ( int i = 0; i < inputx.rows; i++ )
-  {	
-      for( int j = 0; j < inputx.cols; j++ )
-	{
-	  //Normalize calculation
-	  float normMag = ((mag.at<float>(i, j) - magmin) * 255)/ (magmax - magmin);
-	  mag.at<float>(i, j) =  normMag;
-	}		
-    }
-}
+  normaliseMatrix( mag );
+}		
+
+
