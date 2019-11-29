@@ -93,11 +93,11 @@ void detectAndDisplay( Mat frame, int imgnum){
 		Mat xConvo, yConvo, mag, dir;
 		sobel(frame_grey,kernel, xConvo);
 		sobel(frame_grey, kernelT, yConvo);
-		imwrite( "x.jpg", xConvo );
-		imwrite( "y.jpg", yConvo );
 		magDir( xConvo, yConvo, mag, dir);
-		imwrite( "Mag.jpg", mag );
-		imwrite( "Dir.jpg", dir );
+		//imwrite( "x.jpg", xConvo );
+		//imwrite( "y.jpg", yConvo );
+		//imwrite( "Mag.jpg", mag );
+		//imwrite( "Dir.jpg", dir );
 
 		Mat points_circle;
 		int x = mag.rows;
@@ -106,11 +106,11 @@ void detectAndDisplay( Mat frame, int imgnum){
 		int radius = min(x,y)/2;
 		int sizes_circles[] = { x, y, radius };
 		Mat accu_circles(3, sizes_circles, CV_32FC1, cv::Scalar(0));
-		hough_circle( frame, mag, dir, accu_circles, points_circle );
+		//hough_circle( frame, mag, dir, accu_circles, points_circle );
 
 		Mat accu_lines;
-		//vector<vector<int> > points_lines = hough_line( frame, mag, dir, accu_lines);
-		//vector<vector<int> > points_clustered_lines = hough_clustered_lines(frame, points_lines);
+		vector<vector<int> > points_lines = hough_line( frame, mag, dir, accu_lines);
+		vector<vector<int> > points_clustered_lines = hough_clustered_lines(frame, points_lines);
 }
 
 void printFaces(std::vector<Rect> faces){
