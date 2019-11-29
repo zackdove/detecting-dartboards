@@ -33,7 +33,7 @@ int calculate_all();
 float f1_score(float FalsePos, float TruePos, float real_pos);
 
 /** Global variables */
-String cascade_name = "frontalface.xml";
+String cascade_name = "darts.xml";
 CascadeClassifier cascade;
 
 /** @function main */
@@ -132,7 +132,6 @@ void detectAndDisplay( Mat frame, int imgnum){
 	}
 }
 
-
 void printFaces(std::vector<Rect> faces){
 	for (int i = 0; i < faces.size(); i++){
 		std::cout << faces[i] << std::endl;
@@ -144,7 +143,7 @@ void printFaces(std::vector<Rect> faces){
 vector<Rect> ground_truth(int filenum){
 	// std::cout << filenum << std::endl;
 	// File pointer
-    ifstream fin("face_coords.csv");
+    ifstream fin("dart.csv");
 	int file2, count = 0;
 	vector<string> row;
     string line, word, temp;
