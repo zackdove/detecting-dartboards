@@ -40,8 +40,8 @@ void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir);
 void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
 void hough_ellipse(Mat &mag_frame);
 void normaliseMatrix( Mat matrix );
-vector<vector<int>> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
-vector<vector<int>> hough_clustered_lines(cv::Mat &frame, vector<vector<int>> points_lines);
+vector<vector<int> > hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
+vector<vector<int> > hough_clustered_lines(cv::Mat &frame, vector<vector<int> > points_lines);
 
 /** Global variables */
 String cascade_name = "dart.xml";
@@ -97,22 +97,28 @@ void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &a
 	for( int i = 0; i < mag_frame.rows; i++){
 	  for( int j = 0; j < mag_frame.cols; j++){
 	    // Pixel threshold
-	    if(mag_frame.at<float>(i, j) > 200) {
+	    if(mag_frame.at<float>(i, j) > 100) {
 	      // If edge is strong, vote for circles corresponding to its direction
-	      for( int r = 30; r < radius; r++){ 
+	      for( int r = 30; r < radius; r++){
 		//for (int k = -1; k < 2; k++){
 		// for (int l = -1; l < 2; l++){
-		    // Circle centers around selected point 
+		    // Circle centers around selected point
 		      float d = dir_frame.at<float>(i, j);
 		      int a = i + r*cos(d);
 		      int b = j + r*sin(d);
 		      // Check that the radius doesn't exceed the boarder
-		      if((a > 0) && (b > 0) && (a < x) && (b < y)){	
+		      if((a > 0) && (b > 0) && (a < x) && (b < y)){
 			accu_m.at<int>(a, b, r) += 1;
 		      }
-		      //	  } 
+		      //	  }
 		      // }
-	      }	
+			  a = i - r*cos(d);
+		      b = j - r*sin(d);
+		      // Check that the radius doesn't exceed the boarder
+		      if((a > 0) && (b > 0) && (a < x) && (b < y)){
+			accu_m.at<int>(a, b, r) += 1;
+		      }
+	      }
 	    }
 	  }
 	}
@@ -120,7 +126,7 @@ void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &a
 	// Condensing points to (x,y) by summing r's
         for( int i = 0; i < mag_frame.rows; i++){
 	  for( int j = 0; j < mag_frame.cols; j++){
-	    for( int r = 30; r < radius; r++){ 
+	    for( int r = 30; r < radius; r++){
 	      points.at<float>(i, j) += accu_m.at<int>(i,j,r);
 	    }
 	    if(points.at<float>(i, j) > 15){
@@ -138,13 +144,13 @@ void hough_ellipse(Mat &frame){
 	//If above threshold, return true
 }
 
-vector<vector<int>> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m){
+vector<vector<int> > hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m){
 
-  vector<vector<int>> points_lines;
+  vector<vector<int> > points_lines;
   const int x = mag_frame.rows/2;
   const int y = mag_frame.cols/2;
   const int d = sqrt((mag_frame.rows*mag_frame.rows) + (mag_frame.cols*mag_frame.cols)) / 2;
-  const int mini = min(x, y);  
+  const int mini = min(x, y);
   accu_m = Mat(d, 180, CV_32S, cvScalar(0));
 
   // Look for strong edges
@@ -153,12 +159,12 @@ vector<vector<int>> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_
       if(mag_frame.at<float>(i, j) > 100) { // Threshhold
       	int xd = i-x;
        	int yd = j-y;
-	// If edge is strong, vote for lines corresponding to its point 
-       	for( int r = 0; r < 180; r++){ 
+	// If edge is strong, vote for lines corresponding to its point
+       	for( int r = 0; r < 180; r++){
 	  int p = abs((xd*cos(r*CV_PI/180)) + (yd*sin(r*CV_PI/180)));
 	  accu_m.at<int>(p, r)++;
       	}
-      } 
+      }
     }
     for( int p = 0; p < d; p++) {
       for( int r = 0; r < 180; r++) {
@@ -171,27 +177,29 @@ vector<vector<int>> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_
 	 int y1 = int(y0 + mini*(a));
 	 int x2 = int(x0 - mini*(-b));
 	 int y2 = int(y0 - mini*(a));
-	 vector<int> points = {x1,y1,x2,y2};
+	 int points_array[] = {x1,y1,x2,y2};
+	 vector<int> points(points_array, points_array +sizeof(points_array)/sizeof(int));
+
 	 points_lines.push_back(points);
 	 line(frame, Point(y1,x1), Point(y2,x2), (0,0,255), 2);
-	} 
-      }		 
+	}
+      }
     }
   }
   return points_lines;
 }
 
-vector<vector<int>> hough_clustered_lines(Mat &frame, vector<vector<int>> points_lines){
-  vector<vector<int>> points_clustered_lines;
+vector<vector<int> > hough_clustered_lines(Mat &frame, vector<vector<int> > points_lines){
+  vector<vector<int> > points_clustered_lines;
   Mat accu_m = Mat(frame.rows, frame.cols, CV_32S, cvScalar(0));
-  for( int p = 0; p < points_lines.size(); p++){ 
+  for( int p = 0; p < points_lines.size(); p++){
     float x1 = (float)points_lines[p][0];
     float y1 = (float)points_lines[p][1];
     float x2 = (float)points_lines[p][2];
     float y2 = (float)points_lines[p][3];
     float m = (y1 - y2) / (x1 - x2);
     float c = y1 - (m*x1);
-    
+
     for(int x = 0; x < frame.rows; x ++){
       int y = (int)(x*m) + c;
       //std::cout << p << ',' << points_lines.size() << '/' << m << ',' << c << ',' << '/' << x << ',' << y << std::endl;
@@ -209,14 +217,14 @@ void normaliseMatrix( Mat matrix ) {
   double min, max;
   cv::minMaxLoc(matrix, &min, &max);
   for ( int i = 0; i < matrix.rows; i++ )
-    {	
+    {
       for( int j = 0; j < matrix.cols; j++ )
 	{
 	  //Normalize calculation
 	  matrix.at<float>(i, j) = (((matrix.at<float>(i, j) - min) * 255.0) / (max - min));
 	  //std::cout << min << ',' << max << ',' << matrix.at<float>(i, j) << std::endl;
-	}		
-    }	
+	}
+    }
 }
 
 /** @function detectAndDisplay */
@@ -246,10 +254,10 @@ void detectAndDisplay( Mat frame, int imgnum){
 	Mat xConvo, yConvo, mag, dir;
 	sobel(frame_grey,kernel, xConvo);
 	sobel(frame_grey, kernelT, yConvo);
-	imwrite( "x.jpg", xConvo ); 
+	imwrite( "x.jpg", xConvo );
 	imwrite( "y.jpg", yConvo );
 	magDir( xConvo, yConvo, mag, dir);
-	imwrite( "Mag.jpg", mag ); 
+	imwrite( "Mag.jpg", mag );
 	imwrite( "Dir.jpg", dir );
 
         Mat points_circle;
@@ -262,14 +270,14 @@ void detectAndDisplay( Mat frame, int imgnum){
 	hough_circle( frame, mag, dir, accu_circles, points_circle );
 
 	Mat accu_lines;
-	//vector<vector<int>> points_lines = hough_line( frame, mag, dir, accu_lines);
-        //vector<vector<int>> points_clustered_lines = hough_clustered_lines(frame, points_lines); 
+	//vector<vector<int> > points_lines = hough_line( frame, mag, dir, accu_lines);
+        //vector<vector<int> > points_clustered_lines = hough_clustered_lines(frame, points_lines);
 
 	//Draw detected dartboards from cascade for comparison
 	for (int i = 0; i < detected_dartboards.size(); i++){
 		rectangle(frame,
 			Point(detected_dartboards[i].x, detected_dartboards[i].y),
-			Point(detected_dartboards[i].x + detected_dartboards[i].width, 
+			Point(detected_dartboards[i].x + detected_dartboards[i].width,
 			      detected_dartboards[i].y + detected_dartboards[i].height),
 			Scalar( 0, 0, 255 ), 2);
 	}
@@ -307,14 +315,14 @@ void sobel(cv::Mat &input, Mat_<int> kernel, cv::Mat &convo){
 			    int imagey = j + n + kernelRadiusY;
 			    int kernelx = m + kernelRadiusX;
 			    int kernely = n + kernelRadiusY;
-			    
+
 			    // get the values from the padded image and the kernel
 			    int imageval = ( int ) paddedInput.at<uchar>( imagex, imagey );
 			    int kernalval = kernel.at<int>( kernelx, kernely );
-			    
+
 			    // do the multiplication
 			    sum = sum + ( imageval * kernalval );
-			    
+
 			  }
 			}
 		      convo.at<float>(i, j) = sum;
@@ -329,7 +337,7 @@ void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir)
   dir.create(inputx.size(), CV_32FC1);
 
   for ( int i = 0; i < inputx.rows; i++ )
-    {	
+    {
       for( int j = 0; j < inputx.cols; j++ )
 	{
 	  float magx = inputx.at<float>(i, j);
@@ -337,10 +345,8 @@ void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir)
 	  float magTemp = sqrt((magx*magx) + (magy*magy));
 	  float dirTemp = atan2(magy,  magx);
 	  mag.at<float>(i, j) = magTemp;
-	  dir.at<float>(i, j) = dirTemp;		          
+	  dir.at<float>(i, j) = dirTemp;
 	}
     }
   normaliseMatrix( mag );
-}		
-
-
+}
