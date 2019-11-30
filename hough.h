@@ -28,20 +28,20 @@ using namespace cv;
 /** Function Headers */
 void normaliseMatrix( Mat matrix );
 
-
-void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m, Mat &points){
-	points.create(mag_frame.size(), CV_32FC1);
+void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame,
+	Mat &accu_m, Mat &points){
+	int minRadius = 15;
 	const int x = mag_frame.rows;
 	const int y = mag_frame.cols;
-	const int radius = min(x,y) / 2;  // can be max half the size of the smallest dimension
-
+	const int radius = min(x,y) / 4;  // can be max half the size of dimensions
+  points = Mat(x/2, y/2, CV_32S, cvScalar(0));
 	// Look for strong edges
-	for( int i = 0; i < mag_frame.rows; i++){
-		for( int j = 0; j < mag_frame.cols; j++){
+	for( int i = 0; i < x; i++){
+		for( int j = 0; j < y; j++){
 			// Pixel threshold
 			if(mag_frame.at<float>(i, j) > 50) {
 				// Vote for circles corresponding to point's +ve and -ve direction
-				for( int r = 30; r < radius; r++){
+				for( int r = minRadius; r < radius; r++){
 					float d = dir_frame.at<float>(i, j);
 					int a = i + r*cos(d);
 					int b = j + r*sin(d);
@@ -60,20 +60,18 @@ void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &a
 		}
 	}
 
-	// Condensing points to (x,y) by summing r
+	// Condensing points to (x,y) by summing radii
 	for( int i = 0; i < mag_frame.rows; i++){
 		for( int j = 0; j < mag_frame.cols; j++){
-			for( int r = 30; r < radius; r++){
-				points.at<float>(i, j) += accu_m.at<int>(i,j,r);
-			}
-			if(points.at<float>(i, j) > 15){
-				circle(frame, Point(j, i), 10 , Scalar( 0, 0, 255 ), 2);
+			for( int r = minRadius; r < radius; r++){
+				if(i/2 < x/2 && j/2 < y/2){
+					points.at<int>(i/2, j/2) += accu_m.at<int>(i,j,r);
+				}
 			}
 		}
 	}
 	normaliseMatrix( points );
-	imwrite("points.jpg", points);
-  imwrite("hough.jpg", accu_m);
+	imwrite("circle_hough.jpg", points);
 }
 
 void hough_ellipse(Mat &frame){
@@ -82,84 +80,100 @@ void hough_ellipse(Mat &frame){
 	//If above threshold, return true
 }
 
-vector<vector<int> > hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m){
+vector<int> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame){
 
-	vector<vector<int> > points_lines;
-	const int x = mag_frame.rows/2;
-	const int y = mag_frame.cols/2;
+	vector<int> points_lines;
 	const int d = sqrt((mag_frame.rows*mag_frame.rows) + (mag_frame.cols*mag_frame.cols)); //Diameter of image
-	accu_m = Mat(d, 180, CV_32S, cvScalar(0));
+	Mat accu_m = Mat(d, 180, CV_32S, cvScalar(0));
 
 	// Look for strong edges
 	for( int i = 0; i < mag_frame.rows; i++){
 		for( int j = 0; j < mag_frame.cols; j++){
-			if(mag_frame.at<float>(i, j) > 50) { // Threshhold
-				int xd = i-x;
-				int yd = j-y;
+			if(mag_frame.at<float>(i, j) > 45) { // Threshhold
 				// If edge is strong, vote for lines corresponding to its point
 				for( int r = 0; r < 180; r++){
-					int p = (xd*cos(r*CV_PI/180) + (yd*sin(r*CV_PI/180)));
+					int p = (i*cos(r*CV_PI/180) + (j*sin(r*CV_PI/180)));
 					if(p > 0) {
 						accu_m.at<int>(p, r)++;
 					}
-				//	else{
-				//
-				//  }
-				}
-			}
-		}
-
-		for( int p = 0; p < d; p++) {
-			for( int r = 0; r < 180; r++) {
-				if(accu_m.at<int>(p, r) > 170) { // Threshold
-					float a = cos(r*CV_PI/180);
-					float b = sin(r*CV_PI/180);
-					int x0 = x + a*p;
-					int y0 = y + b*p;
-					int x1 = int(x0 + 1000*(-b));
-					int y1 = int(y0 + 1000*(a));
-					int x2 = int(x0 - 1000*(-b));
-					int y2 = int(y0 - 1000*(a));
-					int points_array[] = {x1,y1,x2,y2};
-
-					//vector<int> points(points_array, points_array +sizeof(points_array)/sizeof(int));
-					//points_lines.push_back(points);
-					//for(int i = 0; i < points.size(); i++) {
-					//cout << points[0] << ',';
-				  //}
-				  //cout << endl;
-					line(frame, Point(y1,x1), Point(y2,x2), (0,0,255), 1);
 				}
 			}
 		}
 	}
-  imwrite("hough.jpg", accu_m);
-	imwrite("points.jpg", frame);
+
+	for( int p = 0; p < d; p++) {
+		for( int r = 0; r < 180; r++) {
+			if(accu_m.at<int>(p, r) > 100) { // Threshold
+				float a = cos(r*CV_PI/180);
+				float b = sin(r*CV_PI/180);
+				int x0 = a*p;
+				int y0 = b*p;
+				int x1 = int(x0 + 1000*(-b));
+				int y1 = int(y0 + 1000*(a));
+				int x2 = int(x0 - 1000*(-b));
+				int y2 = int(y0 - 1000*(a));
+				points_lines.push_back(x1);
+				points_lines.push_back(y1);
+				points_lines.push_back(x2);
+				points_lines.push_back(y2);
+			}
+		}
+	}
+  imwrite("lines_hough.jpg", accu_m);
 	return points_lines;
 }
 
-vector<vector<int> > hough_clustered_lines(Mat &frame, vector<vector<int> > points_lines){
-	vector<vector<int> > points_clustered_lines;
-	Mat accu_m = Mat(frame.rows/2, frame.cols/2, CV_32S, cvScalar(0));
-	// Mat reduced = Mat(frame.rows/2,frame.cols/2, CV_32S, cvScalar(0));//src image
-	// Size size((frame.rows)/2,(frame.cols/2));
-  //resize(frame,reduced,reduced.size(), 0, 0);//resize image
-	for( int p = 0; p < points_lines.size(); p++){
-		float x1 = (float)points_lines[p][0] / 2;
-		float y1 = (float)points_lines[p][1] / 2;
-		float x2 = (float)points_lines[p][2] / 2;
-		float y2 = (float)points_lines[p][3] / 2;
+void hough_clustered_lines(Mat &frame, vector<int> points_lines, Mat &accu_m){
+	vector<int> points_clustered_lines;
+	// Reducing the resolution of the image to reduce spread of points
+	accu_m = Mat(frame.rows/2, frame.cols/2, CV_32S, cvScalar(0));
+
+	for( int p = 0; p < points_lines.size(); p = p + 4){
+		float x1 = (float)points_lines[p]   /2;
+		float y1 = (float)points_lines[p+1] /2;
+		float x2 = (float)points_lines[p+2] /2;
+		float y2 = (float)points_lines[p+3] /2;
 		float m = (y1 - y2) / (x1 - x2);
 		float c = y1 - (m*x1);
 
 		for(int x = 0; x < frame.rows/2; x ++){
 			int y = (int)(x*m) + c;
-			//std::cout << p << ',' << points_lines.size() << '/' << m << ',' << c << ',' << '/' << x << ',' << y << std::endl;
-			if( y > 0 && y < frame.rows){
-				accu_m.at<float>(x, y)++;
+			if( (y > 0) && (y < frame.cols/2)){
+				accu_m.at<int>(x, y)++;
 			}
 		}
 	}
+
 	normaliseMatrix(accu_m);
-	return points_clustered_lines;
+	imwrite("clustered_hough.jpg", accu_m);
+}
+
+void hough_combine(Mat &accu_circle, Mat &accu_clustered_lines, Mat& points){
+	const int x = accu_circle.rows;
+	const int y = accu_circle.cols;
+	points = Mat(x, y, CV_32S, cvScalar(0));
+	for(int i = 0; i < x; i++) {
+		for(int j = 0; j < y; j++) {
+			points.at<float>(i, j) += accu_circle.at<float>(i, j);
+			points.at<float>(i, j) += accu_clustered_lines.at<float>(i, j);
+		}
+	}
+	normaliseMatrix(points);
+	imwrite("both.jpg", points);
+}
+
+// Send in specific boxes, if any value is 255 return true
+void hough_detect(Mat& points, bool *detected, int center[2]){
+	const int x = points.rows;
+	const int y = points.cols;
+	for(int i=0; i < x; i++){
+		for(int j = 0; j < y; j++){
+			if(points.at<int>(i,j) == 255.0){
+				*detected = true;
+				// *2 because points is half-sized
+				center[0] = i*2;
+				center[1] = j*2;
+			}
+		}
+	}
 }

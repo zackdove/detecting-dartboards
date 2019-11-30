@@ -41,8 +41,10 @@ void magDir(cv::Mat &inputx, cv::Mat &inputy, cv::Mat &mag, cv::Mat &dir);
 void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
 void hough_ellipse(Mat &mag_frame);
 void normaliseMatrix( Mat matrix );
-vector<vector<int> > hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame, Mat &accu_m);
-vector<vector<int> > hough_clustered_lines(cv::Mat &frame, vector<vector<int> > points_lines);
+vector<int> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame);
+void hough_clustered_lines(Mat &frame, vector<int> points_lines, Mat &accu_m);
+void hough_combine(Mat &accu_circle, Mat &accu_clustered_lines, Mat &points);
+void hough_detect(Mat& points, bool *detected, int center[2]);
 
 /** Global variables */
 String cascade_name = "dart.xml";
@@ -68,49 +70,59 @@ void detectAndDisplay( Mat frame, int imgnum){
 	std::vector<Rect> detected_dartboards;
 	Mat frame_grey;
 	cvtColor( frame, frame_grey, CV_BGR2GRAY );
+  // GaussianBlur(frame_grey, frame_grey, Size(3,3), 2, 2); // Does this help?
 	equalizeHist( frame_grey, frame_grey );
 	cascade.detectMultiScale( frame_grey,
 		detected_dartboards, 1.1, 1, 0|CV_HAAR_SCALE_IMAGE,
 		Size(50, 50), Size(500,500) );
 		cout << "Original detected dartboards" << endl;
 		printFaces(detected_dartboards);
-		//Draw detected dartboards from cascade for comparison
-		for (int i = 0; i < detected_dartboards.size(); i++){
-			rectangle(frame,
-				Point(detected_dartboards[i].x, detected_dartboards[i].y),
-				Point(detected_dartboards[i].x + detected_dartboards[i].width,
-					detected_dartboards[i].y + detected_dartboards[i].height),
-					Scalar( 0, 0, 255 ), 2);
-		}
+	// Draw detected dartboards from cascade for comparison
+	for (int i = 0; i < detected_dartboards.size(); i++){
+		rectangle(frame,
+			Point(detected_dartboards[i].x, detected_dartboards[i].y),
+			Point(detected_dartboards[i].x + detected_dartboards[i].width,
+				detected_dartboards[i].y + detected_dartboards[i].height),
+				Scalar( 0, 0, 255 ), 2);
+	}
+	// Create the SOBEL kernel in 1D, Y is transpose
+	Mat_<int> kernel(3,3);
+	Mat_<int>kernelT(3,3);
+	kernel << -1, 0, 1, -2, 0, 2, -1, 0, 1;
+	kernelT << 1, 2, 1, 0, 0, 0, -1, -2, -1;
 
-		// create the SOBEL kernel in 1D, Y is transpose
-		Mat_<int> kernel(3,3);
-		Mat_<int>kernelT(3,3);
-		kernel << -1, 0, 1, -2, 0, 2, -1, 0, 1;
-		kernelT << 1, 2, 1, 0, 0, 0, -1, -2, -1;
+	// Sobel filter
+	Mat xConvo, yConvo, mag, dir;
+	sobel(frame_grey,kernel, xConvo);
+	sobel(frame_grey, kernelT, yConvo);
+	magDir( xConvo, yConvo, mag, dir);
+	//imwrite( "x.jpg", xConvo );
+	//imwrite( "y.jpg", yConvo );
+	//imwrite( "Mag.jpg", mag );
+	//imwrite( "Dir.jpg", dir );
 
-		// Sobel filter
-		Mat xConvo, yConvo, mag, dir;
-		sobel(frame_grey,kernel, xConvo);
-		sobel(frame_grey, kernelT, yConvo);
-		magDir( xConvo, yConvo, mag, dir);
-		//imwrite( "x.jpg", xConvo );
-		//imwrite( "y.jpg", yConvo );
-		//imwrite( "Mag.jpg", mag );
-		//imwrite( "Dir.jpg", dir );
+	// Hough Circles
+	int x = mag.rows;
+	int y = mag.cols;
+	int radius = min(x,y)/2;
+	int sizes_circles[] = { x, y, radius };
+	Mat accu_circles(3, sizes_circles, CV_32FC1, cv::Scalar(0));
+	Mat points_circle;
+  hough_circle( frame, mag, dir, accu_circles, points_circle );
 
-		Mat points_circle;
-		int x = mag.rows;
-		int y = mag.cols;
+	// Hough Lines
+	Mat accu_clustered_lines;
+	vector<int> points_lines = hough_line( frame, mag, dir);
+	hough_clustered_lines(frame, points_lines, accu_clustered_lines);
 
-		int radius = min(x,y)/2;
-		int sizes_circles[] = { x, y, radius };
-		Mat accu_circles(3, sizes_circles, CV_32FC1, cv::Scalar(0));
-		//hough_circle( frame, mag, dir, accu_circles, points_circle );
+	Mat points;
+	hough_combine(points_circle, accu_clustered_lines, points);
 
-		Mat accu_lines;
-		vector<vector<int> > points_lines = hough_line( frame, mag, dir, accu_lines);
-		vector<vector<int> > points_clustered_lines = hough_clustered_lines(frame, points_lines);
+	bool detected = false;
+	int center[2];
+	hough_detect(points, &detected, center);
+	std::cout << detected << ',' << center[0] << ',' << center[1] << endl;
+
 }
 
 void printFaces(std::vector<Rect> faces){
@@ -137,7 +149,7 @@ void calculate_all(){
 		Mat frame = imread(filename, CV_LOAD_IMAGE_COLOR);
 		if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); };
 		detectAndDisplay( frame, imgnum);
-		imwrite( "detected"+to_string(imgnum)+".jpg", frame );
+		//imwrite( "detected"+to_string(imgnum)+".jpg", frame );
 	}
 }
 
@@ -150,7 +162,6 @@ void normaliseMatrix( Mat matrix ) {
 		{
 			//Normalize calculation
 			matrix.at<float>(i, j) = (((matrix.at<float>(i, j) - min) * 255.0) / (max - min));
-			//std::cout << min << ',' << max << ',' << matrix.at<float>(i, j) << std::endl;
 		}
 	}
 }
