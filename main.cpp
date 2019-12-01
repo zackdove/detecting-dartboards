@@ -77,14 +77,7 @@ void detectAndDisplay( Mat frame, int imgnum){
 		Size(50, 50), Size(500,500) );
 		cout << "Original detected dartboards" << endl;
 		printFaces(detected_dartboards);
-	// Draw detected dartboards from cascade for comparison
-	for (int i = 0; i < detected_dartboards.size(); i++){
-		rectangle(frame,
-			Point(detected_dartboards[i].x, detected_dartboards[i].y),
-			Point(detected_dartboards[i].x + detected_dartboards[i].width,
-				detected_dartboards[i].y + detected_dartboards[i].height),
-				Scalar( 0, 0, 255 ), 2);
-	}
+
 	// Create the SOBEL kernel in 1D, Y is transpose
 	Mat_<int> kernel(3,3);
 	Mat_<int>kernelT(3,3);
@@ -108,21 +101,42 @@ void detectAndDisplay( Mat frame, int imgnum){
 	int sizes_circles[] = { x, y, radius };
 	Mat accu_circles(3, sizes_circles, CV_32FC1, cv::Scalar(0));
 	Mat points_circle;
-  hough_circle( frame, mag, dir, accu_circles, points_circle );
+	hough_circle( frame, mag, dir, accu_circles, points_circle );
 
 	// Hough Lines
 	Mat accu_clustered_lines;
-	vector<int> points_lines = hough_line( frame, mag, dir);
+	vector<int> points_lines = hough_line( frame , mag, dir);
 	hough_clustered_lines(frame, points_lines, accu_clustered_lines);
-
 	Mat points;
 	hough_combine(points_circle, accu_clustered_lines, points);
 
-	bool detected = false;
-	int center[2];
-	hough_detect(points, &detected, center);
-	std::cout << detected << ',' << center[0] << ',' << center[1] << endl;
+	// Draw detected dartboards from cascade for comparison
+	for (int i = 0; i < detected_dartboards.size(); i++){
 
+		// Create a cropped image of each voilaJones detection
+		// '/2' because points is half the size of the frame
+		Mat violaJones = points(Rect((detected_dartboards[i].x / 2)-1,
+																     (detected_dartboards[i].y / 2)-1,
+		                                 (detected_dartboards[i].width / 2)-1,
+																		 (detected_dartboards[i].height / 2)-1));
+
+ 		bool detected = false;
+ 		int center[2] = {0,0};
+ 		hough_detect(violaJones, &detected, center);
+
+		if(detected) {
+
+			int oldX = (detected_dartboards[i].x);
+			int oldY = (detected_dartboards[i].y);
+
+			rectangle(frame,
+								Point(oldX, oldY),
+								Point(oldX + detected_dartboards[i].width,
+											oldY + detected_dartboards[i].height),
+								Scalar( 0, 255, 0 ), 2);
+
+		}
+	}
 }
 
 void printFaces(std::vector<Rect> faces){

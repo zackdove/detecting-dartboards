@@ -168,11 +168,11 @@ void hough_detect(Mat& points, bool *detected, int center[2]){
 	const int y = points.cols;
 	for(int i=0; i < x; i++){
 		for(int j = 0; j < y; j++){
-			if(points.at<int>(i,j) == 255.0){
+			if(points.at<int>(i,j) > 240){
 				*detected = true;
 				// *2 because points is half-sized
-				center[0] = i*2;
-				center[1] = j*2;
+				center[0] = i * 2;
+				center[1] = j * 2;
 			}
 		}
 	}
