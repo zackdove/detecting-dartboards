@@ -186,7 +186,7 @@ void hough_combine(Mat &accu_circle, Mat &accu_clustered_lines, Mat& points){
 		}
 	}
 	normaliseMatrix(points);
-	imwrite("both.jpg", points);
+	//imwrite("both1.jpg", points);
 }
 
 // Send in specific boxes, if any value is 255 return true
