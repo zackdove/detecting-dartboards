@@ -37,7 +37,10 @@ void printFaces(std::vector<Rect> faces);
 Rect vect_to_rect(vector<int> vect);
 void calculate_all();
 float iou_score(Rect A, Rect B);
-void printRectangles(Mat &frame, vector<Rect> detected_rectangles);
+void printRectangles(Mat &frame, vector<Rect> new_detected_dartboards);
+vector<Rect> ground_truth(int filenum);
+float iou(Rect A, Rect B);
+float f1_score(float FalsePos, float TruePos, float real_pos);
 
 /** Global variables */
 String cascade_name = "dart.xml";
@@ -63,57 +66,50 @@ int main( int argc, const char** argv ){
 void detectAndDisplay( Mat frame, int imgnum){
 	std::vector<Rect> detected_dartboards;
 	Mat frame_grey;
+	float iou_threshold = 0.5;
+	float true_positives = 0;
+	float false_positives = 0;
 	cvtColor( frame, frame_grey, CV_BGR2GRAY );
-  //GaussianBlur(frame_grey, frame_grey, Size(3,3), 2); // Does this help?
+	vector<Rect> truth_dartboards = ground_truth(imgnum);
+	//GaussianBlur(frame_grey, frame_grey, Size(3,3), 2); // Does this help?
 	equalizeHist( frame_grey, frame_grey );
-	cascade.detectMultiScale( frame_grey,
-		detected_dartboards, 1.1, 1, 0|CV_HAAR_SCALE_IMAGE,
-		Size(50, 50), Size(500,500) );
-		cout << "Original detected dartboards" << endl;
-		printFaces(detected_dartboards);
-
+	cascade.detectMultiScale( frame_grey,detected_dartboards, 1.1, 1, 0|CV_HAAR_SCALE_IMAGE,Size(50, 50), Size(500,500) );
+	cout << "Original detected dartboards" << endl;
+	printFaces(detected_dartboards);
 	// Sobel filter
 	Mat xConvo, yConvo, mag, dir;
 	sobel(frame_grey, xConvo, yConvo, mag, dir);
-
 	// Hough
 	Mat points;
 	hough(frame, mag, dir, points);
-
-	vector<Rect> detected_rectangles;
+	vector<Rect> new_detected_dartboards;
 	int inc = 0;
 	for (int i = 0; i < detected_dartboards.size(); i++){
-
 		// Create a cropped image of each voilaJones detection
 		// '/2' because points is half the size of the frame
-		Rect rect = Rect((detected_dartboards[i].x / 2)-1,
-																     (detected_dartboards[i].y / 2)-1,
-		                                 (detected_dartboards[i].width / 2)-1,
-																		 (detected_dartboards[i].height / 2)-1);
+		Rect rect = Rect((detected_dartboards[i].x / 2)-1, (detected_dartboards[i].y / 2)-1,(detected_dartboards[i].width / 2)-1,(detected_dartboards[i].height / 2)-1);
 		Mat violaJones = points(rect);
- 		bool detected = false;
- 		int center[2] = {0,0};
- 		hough_detect(violaJones, &detected, center);
-
+		bool detected = false;
+		int center[2] = {0,0};
+		hough_detect(violaJones, &detected, center);
 		if(detected) {
 			int width = detected_dartboards[i].width;
 			int height = detected_dartboards[i].height;
 			int oldX = detected_dartboards[i].x;
 			int oldY = detected_dartboards[i].y;
 			int newX = oldX - width/2 + center[1];
-		  int newY = oldY - height/2 + center[0];
+			int newY = oldY - height/2 + center[0];
 			Rect newRect = Rect(newX, newY, width, height);
-
 			if(inc == 0){
-					detected_rectangles.push_back(newRect);
+				new_detected_dartboards.push_back(newRect);
 			}
 			bool add = false;
-		  for(int k = 0; k < detected_rectangles.size(); k++) {
-				float iou = iou_score(detected_rectangles[k], newRect);
-		    if(iou > 0){
-					if(detected_rectangles[k].width > newRect.width){
-					  add = true;
-						detected_rectangles.erase(detected_rectangles.begin() + k);
+			for(int k = 0; k < new_detected_dartboards.size(); k++) {
+				float iou = iou_score(new_detected_dartboards[k], newRect);
+				if(iou > 0){
+					if(new_detected_dartboards[k].width > newRect.width){
+						add = true;
+						new_detected_dartboards.erase(new_detected_dartboards.begin() + k);
 						inc++;
 						break;
 					}else{
@@ -122,21 +118,48 @@ void detectAndDisplay( Mat frame, int imgnum){
 						break;
 					}
 				}else{ add = true; }
-			inc++;
+				inc++;
 			}
 			if(add){
-				detected_rectangles.push_back(newRect);
+				new_detected_dartboards.push_back(newRect);
 			}
 		}
 	}
-	printRectangles(frame, detected_rectangles);
+	printRectangles(frame, new_detected_dartboards);
+	//Calculate detected dartboard iou
+	for (int j = 0; j < truth_dartboards.size(); j++){
+		for( int i = 0; i < new_detected_dartboards.size(); i++ ){
+			float iou_result = iou(new_detected_dartboards[i], truth_dartboards[j]);
+			// std::cout << "IOU for ground truth face " << truth_dartboards[j] << " with detected face " << detected_faces[i] << " = " << iou_result << std::endl;
+			if (iou_result >= iou_threshold){
+				true_positives++;
+				//Prevents TP being higher than 1 for each face. Assumes that there are no faces inside faces. In which cases we would need to double break
+				break;
+			}
+		}
+	}
+	false_positives += new_detected_dartboards.size()-true_positives;
+	int real_pos = truth_dartboards.size();
+	float f1 = f1_score(false_positives, true_positives, real_pos);
+	float tpr;
+	//Handling for div 0
+	if (true_positives == 0) {
+		tpr = 0;
+	} else {
+		tpr = true_positives/real_pos;
+	}
+	std::cout << "TPR " << tpr << std::endl;
+	std::cout << "F1: " << f1 << "\n" << std::endl;
+	for (int i = 0; i < truth_dartboards.size(); i++){
+		rectangle(frame, Point(truth_dartboards[i].x, truth_dartboards[i].y), Point(truth_dartboards[i].x + truth_dartboards[i].width, truth_dartboards[i].y + truth_dartboards[i].height), Scalar( 0, 0, 255 ), 2);
+	}
 }
 
 float iou_score(Rect A, Rect B){
-    Rect intersection = A&B;
-    float iou = (float)intersection.area() /
-		((float)A.area()+(float)B.area()-(float)intersection.area());
-    return iou;
+	Rect intersection = A&B;
+	float iou = (float)intersection.area() /
+	((float)A.area()+(float)B.area()-(float)intersection.area());
+	return iou;
 }
 
 void printFaces(std::vector<Rect> faces){
@@ -145,48 +168,119 @@ void printFaces(std::vector<Rect> faces){
 	}
 }
 
-void printRectangles(Mat &frame, vector<Rect> detected_rectangles){
-	for (int i = 0; i < detected_rectangles.size(); i++){
+void printRectangles(Mat &frame, vector<Rect> new_detected_dartboards){
+	for (int i = 0; i < new_detected_dartboards.size(); i++){
 		rectangle(frame,
-							Point(detected_rectangles[i].x, detected_rectangles[i].y),
-							Point(detected_rectangles[i].x + detected_rectangles[i].width,
-										detected_rectangles[i].y + detected_rectangles[i].height),
-							Scalar( 0, 255, 0 ), 2);
-	}
-}
-
-int ***malloc3dArray(int dim1, int dim2, int dim3){
-	int i, j, k;
-	int ***array = (int ***) malloc(dim1 * sizeof(int **));
-	for (i = 0; i < dim1; i++) {
-		array[i] = (int **) malloc(dim2 * sizeof(int *));
-		for (j = 0; j < dim2; j++) {
-			array[i][j] = (int *) malloc(dim3 * sizeof(int));
+			Point(new_detected_dartboards[i].x, new_detected_dartboards[i].y),
+			Point(new_detected_dartboards[i].x + new_detected_dartboards[i].width,
+				new_detected_dartboards[i].y + new_detected_dartboards[i].height),
+				Scalar( 0, 255, 0 ), 2);
+			}
 		}
-	}
-	return array;
-}
 
-void calculate_all(){
-	for (int imgnum = 0; imgnum<16; imgnum++){
-		string filename =  "dart"+to_string(imgnum)+".jpg";
-		Mat frame = imread(filename, CV_LOAD_IMAGE_COLOR);
-		if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); };
-		detectAndDisplay( frame, imgnum);
-		//imwrite( "detected"+to_string(imgnum)+".jpg", frame );
-	}
-}
-
-void normaliseMatrix( Mat matrix ) {
-	double min, max;
-	cv::minMaxLoc(matrix, &min, &max);
-	for ( int i = 0; i < matrix.rows; i++ )
-	{
-		for( int j = 0; j < matrix.cols; j++ )
-		{
-			//Normalize calculation
-			matrix.at<float>(i, j) = (((matrix.at<float>(i, j) - min) * 255.0) /
-			(max - min));
+		int ***malloc3dArray(int dim1, int dim2, int dim3){
+			int i, j, k;
+			int ***array = (int ***) malloc(dim1 * sizeof(int **));
+			for (i = 0; i < dim1; i++) {
+				array[i] = (int **) malloc(dim2 * sizeof(int *));
+				for (j = 0; j < dim2; j++) {
+					array[i][j] = (int *) malloc(dim3 * sizeof(int));
+				}
+			}
+			return array;
 		}
-	}
-}
+
+		void calculate_all(){
+			for (int imgnum = 0; imgnum<16; imgnum++){
+				string filename =  "dartPictures/dart"+to_string(imgnum)+".jpg";
+				Mat frame = imread(filename, CV_LOAD_IMAGE_COLOR);
+				if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); };
+				detectAndDisplay( frame, imgnum);
+				//imwrite( "detected"+to_string(imgnum)+".jpg", frame );
+			}
+		}
+
+		void normaliseMatrix( Mat matrix ) {
+			double min, max;
+			cv::minMaxLoc(matrix, &min, &max);
+			for ( int i = 0; i < matrix.rows; i++ )
+			{
+				for( int j = 0; j < matrix.cols; j++ )
+				{
+					//Normalize calculation
+					matrix.at<float>(i, j) = (((matrix.at<float>(i, j) - min) * 255.0) /
+					(max - min));
+				}
+			}
+		}
+
+		float f1_score(float FalsePos, float TruePos, float RealPos){
+			float precision;
+			if (TruePos == 0) {
+				precision = 0;
+			} else {
+				precision = TruePos/(TruePos+FalsePos);
+			}
+			float recall;
+			if (TruePos == 0) {
+				recall = 0;
+			} else {
+				recall = TruePos/(RealPos);
+			}
+			if (precision == 0 && recall == 0){
+				return 0;
+			} else {
+				return 2*(precision*recall)/(precision+recall);
+			}
+		}
+
+		//Using https://www.geeksforgeeks.org/csv-file-management-using-c/
+		//Can optimise by storing into an array
+		vector<Rect> ground_truth(int filenum){
+			// std::cout << filenum << std::endl;
+			// File pointer
+			ifstream fin("dart.csv");
+			int file2, count = 0;
+			vector<string> row;
+			string line, word, temp;
+			vector<int> face_coords;
+			vector<Rect> face_coords_set;
+			while (getline(fin, line)) {
+				row.clear();
+				istringstream iss(line);
+				while (getline(iss, word, ',')) {
+					row.push_back(word);
+				}
+				file2 = stoi(row[0]);
+				if (file2 == filenum) {
+					count = 1;
+					row.erase(row.begin());
+					// std::cout << "row size = " << row.size() << std::endl;
+					for (int i=0; i<row.size(); i=i+4){
+						face_coords_set.push_back(Rect(stoi(row[i]),stoi(row[i+1]),stoi(row[i+2])-stoi(row[i]),stoi(row[i+3])-stoi(row[i+1])));
+					}
+					return face_coords_set;
+					break;
+				}
+			}
+			if (count == 0){
+				// cout << "Record not found\n";
+
+			}
+			return face_coords_set;
+		}
+
+
+		Rect vect_to_rect(vector<int> vect){
+			return Rect(vect[0], vect[1], vect[2]-vect[0], vect[3]-vect[1]);
+		}
+
+		float iou(Rect A, Rect B){
+			// std::cout << "A " << A << std::endl;
+			// std::cout << "B " << B << std::endl;
+			Rect intersection = A&B;
+			// std::cout << "inter " << intersection.area() << std::endl;
+			float iou = (float)intersection.area() / ((float)A.area()+(float)B.area()-(float)intersection.area());
+			// std::cout << "iou " << std::fixed << std::setprecision(5) << iou << std::endl;
+			return iou;
+		}
