@@ -33,7 +33,7 @@ int calculate_all();
 float f1_score(float FalsePos, float TruePos, float real_pos);
 
 /** Global variables */
-String cascade_name = "darts.xml";
+String cascade_name = "dart.xml";
 CascadeClassifier cascade;
 
 /** @function main */
@@ -42,7 +42,7 @@ int main( int argc, const char** argv ){
 	if (imgnum == "all"){
 		calculate_all();
 	} else {
-		string filename =  "dart"+imgnum+".jpg";
+		string filename =  "dartPictures/dart"+imgnum+".jpg";
 		Mat frame = imread(filename, CV_LOAD_IMAGE_COLOR);
 		if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
 		detectAndDisplay( frame, stoi(imgnum) );
@@ -53,7 +53,7 @@ int main( int argc, const char** argv ){
 
  int calculate_all(){
 	 for (int imgnum = 0; imgnum<16; imgnum++){
-		string filename =  "dart"+to_string(imgnum)+".jpg";
+		string filename =  "dartPictures/dart"+to_string(imgnum)+".jpg";
  		Mat frame = imread(filename, CV_LOAD_IMAGE_COLOR);
  		if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); return -1; };
  		detectAndDisplay( frame, imgnum);
