@@ -74,8 +74,8 @@ void detectAndDisplay( Mat frame, int imgnum){
 	//GaussianBlur(frame_grey, frame_grey, Size(3,3), 2); // Does this help?
 	equalizeHist( frame_grey, frame_grey );
 	cascade.detectMultiScale( frame_grey,detected_dartboards, 1.1, 1, 0|CV_HAAR_SCALE_IMAGE,Size(50, 50), Size(500,500) );
-	cout << "Original detected dartboards" << endl;
-	printFaces(detected_dartboards);
+	// cout << "Original detected dartboards" << endl;
+	// printFaces(detected_dartboards);
 	// Sobel filter
 	Mat xConvo, yConvo, mag, dir;
 	sobel(frame_grey, xConvo, yConvo, mag, dir);
@@ -125,6 +125,8 @@ void detectAndDisplay( Mat frame, int imgnum){
 			}
 		}
 	}
+	// cout << "New detected dartboards" << endl;
+	// printFaces(new_detected_dartboards);
 	printRectangles(frame, new_detected_dartboards);
 	//Calculate detected dartboard iou
 	for (int j = 0; j < truth_dartboards.size(); j++){
@@ -170,117 +172,114 @@ void printFaces(std::vector<Rect> faces){
 
 void printRectangles(Mat &frame, vector<Rect> new_detected_dartboards){
 	for (int i = 0; i < new_detected_dartboards.size(); i++){
-		rectangle(frame,
-			Point(new_detected_dartboards[i].x, new_detected_dartboards[i].y),
-			Point(new_detected_dartboards[i].x + new_detected_dartboards[i].width,
-				new_detected_dartboards[i].y + new_detected_dartboards[i].height),
-				Scalar( 0, 255, 0 ), 2);
-			}
+		rectangle(frame,Point(new_detected_dartboards[i].x, new_detected_dartboards[i].y),Point(new_detected_dartboards[i].x + new_detected_dartboards[i].width,new_detected_dartboards[i].y + new_detected_dartboards[i].height),Scalar( 0, 255, 0 ), 2);
+	}
+}
+
+int ***malloc3dArray(int dim1, int dim2, int dim3){
+	int i, j, k;
+	int ***array = (int ***) malloc(dim1 * sizeof(int **));
+	for (i = 0; i < dim1; i++) {
+		array[i] = (int **) malloc(dim2 * sizeof(int *));
+		for (j = 0; j < dim2; j++) {
+			array[i][j] = (int *) malloc(dim3 * sizeof(int));
 		}
+	}
+	return array;
+}
 
-		int ***malloc3dArray(int dim1, int dim2, int dim3){
-			int i, j, k;
-			int ***array = (int ***) malloc(dim1 * sizeof(int **));
-			for (i = 0; i < dim1; i++) {
-				array[i] = (int **) malloc(dim2 * sizeof(int *));
-				for (j = 0; j < dim2; j++) {
-					array[i][j] = (int *) malloc(dim3 * sizeof(int));
-				}
-			}
-			return array;
+void calculate_all(){
+	for (int imgnum = 0; imgnum<16; imgnum++){
+		cout<<"Image: "<<imgnum<<endl;
+		string filename =  "dartPictures/dart"+to_string(imgnum)+".jpg";
+		Mat frame = imread(filename, CV_LOAD_IMAGE_COLOR);
+		if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); };
+		detectAndDisplay( frame, imgnum);
+		//imwrite( "detected"+to_string(imgnum)+".jpg", frame );
+	}
+}
+
+void normaliseMatrix( Mat matrix ) {
+	double min, max;
+	cv::minMaxLoc(matrix, &min, &max);
+	for ( int i = 0; i < matrix.rows; i++ )
+	{
+		for( int j = 0; j < matrix.cols; j++ )
+		{
+			//Normalize calculation
+			matrix.at<float>(i, j) = (((matrix.at<float>(i, j) - min) * 255.0) /
+			(max - min));
 		}
+	}
+}
 
-		void calculate_all(){
-			for (int imgnum = 0; imgnum<16; imgnum++){
-				string filename =  "dartPictures/dart"+to_string(imgnum)+".jpg";
-				Mat frame = imread(filename, CV_LOAD_IMAGE_COLOR);
-				if( !cascade.load( cascade_name ) ){ printf("--(!)Error loading\n"); };
-				detectAndDisplay( frame, imgnum);
-				//imwrite( "detected"+to_string(imgnum)+".jpg", frame );
-			}
+float f1_score(float FalsePos, float TruePos, float RealPos){
+	float precision;
+	if (TruePos == 0) {
+		precision = 0;
+	} else {
+		precision = TruePos/(TruePos+FalsePos);
+	}
+	float recall;
+	if (TruePos == 0) {
+		recall = 0;
+	} else {
+		recall = TruePos/(RealPos);
+	}
+	if (precision == 0 && recall == 0){
+		return 0;
+	} else {
+		return 2*(precision*recall)/(precision+recall);
+	}
+}
+
+//Using https://www.geeksforgeeks.org/csv-file-management-using-c/
+//Can optimise by storing into an array
+vector<Rect> ground_truth(int filenum){
+	// std::cout << filenum << std::endl;
+	// File pointer
+	ifstream fin("dart.csv");
+	int file2, count = 0;
+	vector<string> row;
+	string line, word, temp;
+	vector<int> face_coords;
+	vector<Rect> face_coords_set;
+	while (getline(fin, line)) {
+		row.clear();
+		istringstream iss(line);
+		while (getline(iss, word, ',')) {
+			row.push_back(word);
 		}
-
-		void normaliseMatrix( Mat matrix ) {
-			double min, max;
-			cv::minMaxLoc(matrix, &min, &max);
-			for ( int i = 0; i < matrix.rows; i++ )
-			{
-				for( int j = 0; j < matrix.cols; j++ )
-				{
-					//Normalize calculation
-					matrix.at<float>(i, j) = (((matrix.at<float>(i, j) - min) * 255.0) /
-					(max - min));
-				}
-			}
-		}
-
-		float f1_score(float FalsePos, float TruePos, float RealPos){
-			float precision;
-			if (TruePos == 0) {
-				precision = 0;
-			} else {
-				precision = TruePos/(TruePos+FalsePos);
-			}
-			float recall;
-			if (TruePos == 0) {
-				recall = 0;
-			} else {
-				recall = TruePos/(RealPos);
-			}
-			if (precision == 0 && recall == 0){
-				return 0;
-			} else {
-				return 2*(precision*recall)/(precision+recall);
-			}
-		}
-
-		//Using https://www.geeksforgeeks.org/csv-file-management-using-c/
-		//Can optimise by storing into an array
-		vector<Rect> ground_truth(int filenum){
-			// std::cout << filenum << std::endl;
-			// File pointer
-			ifstream fin("dart.csv");
-			int file2, count = 0;
-			vector<string> row;
-			string line, word, temp;
-			vector<int> face_coords;
-			vector<Rect> face_coords_set;
-			while (getline(fin, line)) {
-				row.clear();
-				istringstream iss(line);
-				while (getline(iss, word, ',')) {
-					row.push_back(word);
-				}
-				file2 = stoi(row[0]);
-				if (file2 == filenum) {
-					count = 1;
-					row.erase(row.begin());
-					// std::cout << "row size = " << row.size() << std::endl;
-					for (int i=0; i<row.size(); i=i+4){
-						face_coords_set.push_back(Rect(stoi(row[i]),stoi(row[i+1]),stoi(row[i+2])-stoi(row[i]),stoi(row[i+3])-stoi(row[i+1])));
-					}
-					return face_coords_set;
-					break;
-				}
-			}
-			if (count == 0){
-				// cout << "Record not found\n";
-
+		file2 = stoi(row[0]);
+		if (file2 == filenum) {
+			count = 1;
+			row.erase(row.begin());
+			// std::cout << "row size = " << row.size() << std::endl;
+			for (int i=0; i<row.size(); i=i+4){
+				face_coords_set.push_back(Rect(stoi(row[i]),stoi(row[i+1]),stoi(row[i+2])-stoi(row[i]),stoi(row[i+3])-stoi(row[i+1])));
 			}
 			return face_coords_set;
+			break;
 		}
+	}
+	if (count == 0){
+		// cout << "Record not found\n";
+
+	}
+	return face_coords_set;
+}
 
 
-		Rect vect_to_rect(vector<int> vect){
-			return Rect(vect[0], vect[1], vect[2]-vect[0], vect[3]-vect[1]);
-		}
+Rect vect_to_rect(vector<int> vect){
+	return Rect(vect[0], vect[1], vect[2]-vect[0], vect[3]-vect[1]);
+}
 
-		float iou(Rect A, Rect B){
-			// std::cout << "A " << A << std::endl;
-			// std::cout << "B " << B << std::endl;
-			Rect intersection = A&B;
-			// std::cout << "inter " << intersection.area() << std::endl;
-			float iou = (float)intersection.area() / ((float)A.area()+(float)B.area()-(float)intersection.area());
-			// std::cout << "iou " << std::fixed << std::setprecision(5) << iou << std::endl;
-			return iou;
-		}
+float iou(Rect A, Rect B){
+	// std::cout << "A " << A << std::endl;
+	// std::cout << "B " << B << std::endl;
+	Rect intersection = A&B;
+	// std::cout << "inter " << intersection.area() << std::endl;
+	float iou = (float)intersection.area() / ((float)A.area()+(float)B.area()-(float)intersection.area());
+	// std::cout << "iou " << std::fixed << std::setprecision(5) << iou << std::endl;
+	return iou;
+}

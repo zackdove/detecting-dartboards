@@ -27,6 +27,33 @@ using namespace cv;
 
 /** Function Headers */
 void normaliseMatrix( Mat matrix );
+void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame,
+	                Mat &accu_m, Mat &points);
+vector<int> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame);
+void hough_clustered_lines(Mat &frame, vector<int> points_lines, Mat &accu_m);
+void hough_combine(Mat &accu_circle, Mat &accu_clustered_lines, Mat& points);
+void hough_detect(Mat& points, bool *detected, int center[2]);
+/** */
+
+void hough(Mat &frame, Mat &mag, Mat &dir, Mat &points){
+  // Hough Circles
+	int x = mag.rows;
+	int y = mag.cols;
+	int radius = min(x,y)/2;
+	int sizes_circles[] = { x, y, radius };
+	Mat accu_circles(3, sizes_circles, CV_32FC1, cv::Scalar(0));
+	Mat points_circle;
+	hough_circle( frame, mag, dir, accu_circles, points_circle);
+
+	// Hough Lines
+	Mat accu_clustered_lines;
+	vector<int> points_lines = hough_line( frame , mag, dir);
+	hough_clustered_lines(frame, points_lines, accu_clustered_lines);
+
+	// Combine Circle and Line
+	hough_combine(points_circle, accu_clustered_lines, points);
+}
+
 
 void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame,
 	Mat &accu_m, Mat &points){
@@ -71,7 +98,7 @@ void hough_circle(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame,
 		}
 	}
 	normaliseMatrix( points );
-	imwrite("circle_hough.jpg", points);
+	//imwrite("circle_hough.jpg", points);
 }
 
 void hough_ellipse(Mat &frame){
@@ -83,7 +110,8 @@ void hough_ellipse(Mat &frame){
 vector<int> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame){
 
 	vector<int> points_lines;
-	const int d = sqrt((mag_frame.rows*mag_frame.rows) + (mag_frame.cols*mag_frame.cols)); //Diameter of image
+	const int d = sqrt((mag_frame.rows*mag_frame.rows) +
+	(mag_frame.cols*mag_frame.cols)); //Diameter of image
 	Mat accu_m = Mat(d, 180, CV_32S, cvScalar(0));
 
 	// Look for strong edges
@@ -119,7 +147,7 @@ vector<int> hough_line(cv::Mat &frame, cv::Mat &mag_frame, cv::Mat &dir_frame){
 			}
 		}
 	}
-  imwrite("lines_hough.jpg", accu_m);
+  //imwrite("lines_hough.jpg", accu_m);
 	return points_lines;
 }
 
@@ -143,9 +171,8 @@ void hough_clustered_lines(Mat &frame, vector<int> points_lines, Mat &accu_m){
 			}
 		}
 	}
-
 	normaliseMatrix(accu_m);
-	imwrite("clustered_hough.jpg", accu_m);
+	//imwrite("clustered_hough.jpg", accu_m);
 }
 
 void hough_combine(Mat &accu_circle, Mat &accu_clustered_lines, Mat& points){
@@ -168,7 +195,7 @@ void hough_detect(Mat& points, bool *detected, int center[2]){
 	const int y = points.cols;
 	for(int i=0; i < x; i++){
 		for(int j = 0; j < y; j++){
-			if(points.at<int>(i,j) > 240){
+			if(points.at<int>(i,j) > 235){
 				*detected = true;
 				// *2 because points is half-sized
 				center[0] = i * 2;
